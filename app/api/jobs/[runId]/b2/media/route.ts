@@ -13,12 +13,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ runI
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: 'Sign in to view this media.' }, { status: 401 });
-    const lookup = supabase.from('qa_jobs').select('id,run_id,original_b2_key,dubbed_b2_key').eq('user_id', user.id);
+    const lookup = supabase.from('qa_jobs').select('id,run_id,original_b2_key,dubbed_b2_key');
     const { data: job, error } = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId)
       ? await lookup.eq('id', runId).maybeSingle()
       : await lookup.eq('run_id', runId).maybeSingle();
     if (error) throw error;
-    if (!job) return Response.json({ error: 'This job does not belong to your account.' }, { status: 404 });
+    if (!job) return Response.json({ error: 'This job is not available to your account.' }, { status: 404 });
     const key = track === 'source' ? job.original_b2_key : job.dubbed_b2_key;
     if (!key) return Response.json({ error: 'This video is not archived in Backblaze B2.' }, { status: 404 });
     const config = getB2Config();

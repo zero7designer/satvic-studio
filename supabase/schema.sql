@@ -35,6 +35,8 @@ create table if not exists public.qa_jobs (
 
 alter table public.qa_jobs enable row level security;
 drop policy if exists "Users can read their own QA jobs" on public.qa_jobs;
+drop policy if exists "Users can read own and shared QA jobs" on public.qa_jobs;
+drop policy if exists "Users can read QA jobs in shared folders" on public.qa_jobs;
 drop policy if exists "Users can create their own QA jobs" on public.qa_jobs;
 drop policy if exists "Users can update their own QA jobs" on public.qa_jobs;
 drop policy if exists "Users can delete their own QA jobs" on public.qa_jobs;
@@ -57,10 +59,12 @@ create table if not exists public.qa_folders (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (char_length(name) between 1 and 80),
   video_type text check (video_type in ('short', 'long')),
+  is_shared boolean not null default false,
   created_at timestamptz not null default now(),
   unique (id, user_id)
 );
 alter table public.qa_folders add column if not exists video_type text check (video_type in ('short', 'long'));
+alter table public.qa_folders add column if not exists is_shared boolean not null default false;
 update public.qa_folders set video_type = 'short' where video_type is null;
 alter table public.qa_folders add column if not exists feedback_form_url text;
 alter table public.qa_folders add column if not exists feedback_sheet_url text;
@@ -68,10 +72,11 @@ alter table public.qa_folders add column if not exists feedback_sheet_url text;
 create unique index if not exists qa_folders_user_name_idx on public.qa_folders (user_id, lower(name));
 alter table public.qa_folders enable row level security;
 drop policy if exists "Users can read their own folders" on public.qa_folders;
+drop policy if exists "Users can read their own or shared folders" on public.qa_folders;
 drop policy if exists "Users can create their own folders" on public.qa_folders;
   drop policy if exists "Users can update their own folders" on public.qa_folders;
 drop policy if exists "Users can delete their own folders" on public.qa_folders;
-create policy "Users can read their own folders" on public.qa_folders for select to authenticated using ((select auth.uid()) = user_id);
+create policy "Users can read their own or shared folders" on public.qa_folders for select to authenticated using ((select auth.uid()) = user_id or is_shared);
 create policy "Users can create their own folders" on public.qa_folders for insert to authenticated with check ((select auth.uid()) = user_id);
   create policy "Users can update their own folders" on public.qa_folders for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own folders" on public.qa_folders for delete to authenticated using ((select auth.uid()) = user_id);
@@ -84,5 +89,16 @@ do $$ begin
       foreign key (folder_id, user_id) references public.qa_folders (id, user_id);
   end if;
 end $$;
+drop policy if exists "Users can read their own QA jobs" on public.qa_jobs;
+drop policy if exists "Users can read own and shared QA jobs" on public.qa_jobs;
+create policy "Users can read own and shared QA jobs" on public.qa_jobs for select to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or exists (
+      select 1 from public.qa_folders
+      where qa_folders.id = qa_jobs.folder_id
+        and qa_folders.is_shared
+    )
+  );
 create index if not exists qa_jobs_folder_user_created_idx on public.qa_jobs (user_id, folder_id, created_at desc);
 notify pgrst, 'reload schema';

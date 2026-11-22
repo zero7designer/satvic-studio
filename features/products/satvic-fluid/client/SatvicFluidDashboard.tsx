@@ -10,14 +10,14 @@ import FeedbackCalendarCard from '@/features/dashboard/client/FeedbackCalendarCa
 import {
   Activity, AlertCircle, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, Calculator, Check, CheckCheck,
   Clock3, FileAudio, FileText, ExternalLink, Folder, FolderPlus, FolderOpen, Headphones, Languages,
-  LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, ShieldCheck, Trash2,
+  LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Share2, ShieldCheck, Trash2,
   Upload, X, Zap,
 } from 'lucide-react';
 
 type Issue = { title: string; detail: string; time?: string; source?: string; severity: 'critical' | 'review' | 'info'; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only'; sourceQuote?: string; dubQuote?: string };
-type Project = { title: string; source: string; target: string; status: 'Needs review' | 'In progress' | 'Ready' | 'Failed' | 'Example'; issues: number; date: string; createdAt?: string; color: string; initials: string; jobId?: string; folderId?: string; completedSeconds?: number; sourceDurationSeconds?: number; workflowMode?: 'sarvam' | 'review'; errorMessage?: string; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; dubbedAvailable?: boolean; isExample?: boolean };
+type Project = { title: string; source: string; target: string; status: 'Needs review' | 'In progress' | 'Ready' | 'Failed' | 'Example'; issues: number; date: string; createdAt?: string; color: string; initials: string; jobId?: string; folderId?: string; completedSeconds?: number; sourceDurationSeconds?: number; workflowMode?: 'sarvam' | 'review'; errorMessage?: string; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; dubbedAvailable?: boolean; isExample?: boolean; readOnly?: boolean };
 type VideoFormType = 'short' | 'long';
-type ProjectFolder = { id: string; name: string; created_at: string; video_type: VideoFormType | null; feedback_form_url?: string | null; feedback_sheet_url?: string | null };
+type ProjectFolder = { id: string; name: string; created_at: string; video_type: VideoFormType | null; feedback_form_url?: string | null; feedback_sheet_url?: string | null; is_shared: boolean; is_owner: boolean };
 type TranscriptSegment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type AnalysisReport = { project: string; sourceLanguage: string; targetLanguage: string; createdAt: string; originalTranscript: string; dubbedTranscript: string; backTranslation: string; findings: Issue[]; disclaimer: string; originalSegments: TranscriptSegment[]; dubbedSegments: TranscriptSegment[]; timestampsAvailable: boolean; transcriptionEngine: string; semanticReviewEngine: string | null; transcriptCrossCheckAvailable: boolean; transcriptCrossCheckError?: string | null; audioReviewCompleted?: boolean; audioReviewEngine?: string; audioReviewFindingCount?: number; audioReviewChunkCount?: number; reviewCoverageWarnings?: string[]; reviewComplete?: boolean; generatedBySarvam?: boolean; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; originalB2Key?: string | null; dubbedB2Key?: string | null; reportB2Key?: string | null };
 type Preflight = { fingerprint: string; geminiModel: string; cleanupNeeded: boolean; storage: { availableBytes: number; requiredBytes: number; cleanedBytes?: number }; limitations: string; durationSeconds?: number };
@@ -39,6 +39,7 @@ function quoteTimeRange(segments: TranscriptSegment[], phrase: string) {
     const score = terms.filter(term => text.includes(term)).length / terms.length;
     if (!best || score > best.score) best = { score, segment };
   }
+
   return best && best.score >= 0.34 ? { start: best.segment.start, end: best.segment.end } : null;
 }
 function findingTimeRange(issue: Issue, segments: TranscriptSegment[], side: 'source' | 'dub') {
@@ -158,6 +159,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [renameFolderName, setRenameFolderName] = useState('');
   const [renameFolderError, setRenameFolderError] = useState('');
   const [renameFolderSaving, setRenameFolderSaving] = useState(false);
+  const [sharingFolderId, setSharingFolderId] = useState<string | null>(null);
   const [projectFolderId, setProjectFolderId] = useState('');
   const [workflowProjectOpen, setWorkflowProjectOpen] = useState(false);
   const [workflowProjectCreating, setWorkflowProjectCreating] = useState(false);
@@ -284,7 +286,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     setWorkflowProjectName('');
     setWorkflowProjectCreating(false);
     if (activeFolderId) {
-      continueWorkflowInProject(activeFolderId);
+      const folder = folders.find(item => item.id === activeFolderId);
+      continueWorkflowInProject(folder?.is_owner ? activeFolderId : '');
       return;
     }
     setWorkflowVideoType(null);
@@ -329,7 +332,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         if (!response.ok) throw new Error(body.error || 'Could not load account history.');
         if (!active) return;
         setAccountEmail(body.userEmail || '');
-        const jobs = (body.jobs || []) as Array<{ id: string; run_id: string | null; project_name: string; source_language: string; target_language: string; folder_id?: string | null; original_video_url?: string | null; dubbed_available?: boolean; created_at: string; updated_at?: string; status: string; issue_count?: number; error_message?: string | null }>;
+        const jobs = (body.jobs || []) as Array<{ id: string; run_id: string | null; project_name: string; source_language: string; target_language: string; folder_id?: string | null; original_video_url?: string | null; dubbed_available?: boolean; created_at: string; updated_at?: string; status: string; issue_count?: number; error_message?: string | null; read_only?: boolean }>;
         const updates = await Promise.all(jobs.filter(job => ['running', 'queued'].includes(job.status)).map(async job => {
           const response = await fetch(`/api/jobs/${encodeURIComponent(job.run_id || job.id)}`, { cache: 'no-store' });
           const body = await response.json().catch(() => ({}));
@@ -344,7 +347,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         setProjects([exampleProject, ...merged.map((job) => {
           const completionMs = job.updated_at ? Date.parse(job.updated_at) - Date.parse(job.created_at) : NaN;
           const status: Project['status'] = job.status === 'completed' ? (job.issue_count ? 'Needs review' : 'Ready') : job.status === 'failed' ? 'Failed' : 'In progress';
-          return { title: job.project_name, source: job.source_language, target: job.target_language, status, issues: job.issue_count || 0, date: new Date(job.created_at).toLocaleDateString(), createdAt: job.created_at, color: 'lilac', initials: job.project_name.slice(0, 2).toUpperCase(), jobId: job.run_id || job.id, folderId: job.folder_id || undefined, workflowMode: job.run_id ? 'sarvam' as const : 'review' as const, originalVideoUrl: job.original_video_url || null, dubbedAvailable: Boolean(job.dubbed_available), completedSeconds: (job.status === 'completed' || job.status === 'failed') && Number.isFinite(completionMs) && completionMs >= 0 ? Math.round(completionMs / 1000) : undefined, errorMessage: job.error_message || undefined };
+          return { title: job.project_name, source: job.source_language, target: job.target_language, status, issues: job.issue_count || 0, date: new Date(job.created_at).toLocaleDateString(), createdAt: job.created_at, color: 'lilac', initials: job.project_name.slice(0, 2).toUpperCase(), jobId: job.run_id || job.id, folderId: job.folder_id || undefined, workflowMode: job.run_id ? 'sarvam' as const : 'review' as const, originalVideoUrl: job.original_video_url || null, dubbedAvailable: Boolean(job.dubbed_available), completedSeconds: (job.status === 'completed' || job.status === 'failed') && Number.isFinite(completionMs) && completionMs >= 0 ? Math.round(completionMs / 1000) : undefined, errorMessage: job.error_message || undefined, readOnly: Boolean(job.read_only) };
         })]);
       } catch { /* Keep the current dashboard visible if history is temporarily unavailable. */ }
     };
@@ -408,6 +411,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }), [projects, query, activeFolderId, selectedMapState]);
 
   const folderProjects = activeFolderId ? projects.filter(project => project.folderId === activeFolderId && !project.isExample) : projects.filter(project => !project.isExample);
+  const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
+  const readOnlyContext = Boolean((activeFolder && !activeFolder.is_owner) || details?.readOnly || projects.find(project => project.jobId === projectMenuId)?.readOnly);
+  useEffect(() => {
+    document.body.classList.toggle('shared-folder-readonly', readOnlyContext);
+    return () => document.body.classList.remove('shared-folder-readonly');
+  }, [readOnlyContext]);
   const costEstimateProjects = projects.filter(project => !project.isExample && Boolean(project.folderId));
   const costEstimateRows = useMemo(() => costEstimateProjects.map(project => {
     const key = project.jobId || project.title;
@@ -577,6 +586,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           : `${audioReviewEvidence} No direct audio findings.`;
 
   async function retrySavedDubQa(project: Project) {
+    if (project.readOnly) { setNotice('Shared projects are read-only.'); return; }
     if (!project.jobId || retryingQaJobId) return;
     setRetryingQaJobId(project.jobId);
     try {
@@ -1035,6 +1045,28 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     }
   }
 
+  async function toggleActiveFolderSharing() {
+    const folder = folders.find(item => item.id === activeFolderId);
+    if (!folder?.is_owner || sharingFolderId) return;
+    setSharingFolderId(folder.id);
+    try {
+      const response = await fetch('/api/folders', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ folderId: folder.id, isShared: !folder.is_shared }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not change this folder’s sharing setting.');
+      const updatedFolder = body.folder as ProjectFolder;
+      setFolders(current => current.map(item => item.id === folder.id ? updatedFolder : item));
+      setNotice(updatedFolder.is_shared ? 'This project is now shared with everyone in Satvic Studio.' : 'This project is no longer shared with everyone.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not change this folder’s sharing setting.');
+    } finally {
+      setSharingFolderId(null);
+    }
+  }
+
   async function saveFolderFeedbackLinks(formUrl: string, sheetUrl: string) {
     const folderId = activeFolderId;
     if (!folderId) throw new Error('Open a project folder before adding its feedback form.');
@@ -1076,7 +1108,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }
 
   async function moveProjectToFolder(project: Project, folderId: string) {
+    if (project.readOnly) { setNotice('Shared projects are read-only.'); return; }
     if (!project.jobId || movingProjectId === project.jobId) return;
+    if (folderId && !folders.find(folder => folder.id === folderId)?.is_owner) {
+      setNotice('You can only move projects into folders you own.');
+      return;
+    }
     const nextFolderId = folderId || null;
     if ((project.folderId || null) === nextFolderId) return;
     setMovingProjectId(project.jobId);
@@ -1099,6 +1136,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
 
   async function archiveFullReportToB2() {
     setArchiveMenuOpen(false);
+    if (details?.readOnly) { setNotice('Shared projects are read-only.'); return; }
     const jobId = details?.jobId;
     if (!jobId || !report?.dubbedVideoUrl) { setNotice('There is no completed dubbed output to archive.'); return; }
     if (!b2Configured) { setNotice('Backblaze B2 is not configured on this deployment. Add its credentials to the server environment and redeploy.'); return; }
@@ -1118,6 +1156,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
 
   async function saveProjectName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (details?.readOnly) { setNotice('Shared projects are read-only.'); return; }
     const jobId = details?.jobId;
     const projectName = renameProjectValue.trim();
     if (!jobId) { setNotice('This project cannot be renamed because its job ID is unavailable.'); return; }
@@ -1150,6 +1189,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }
 
   async function deleteProject(project: Project) {
+    if (project.readOnly) { setNotice('Shared projects are read-only.'); return; }
     if (!project.jobId) { setNotice('This project cannot be deleted because its job ID is unavailable.'); return; }
     setDeletingProjectId(project.jobId);
     try {
@@ -1315,10 +1355,25 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
               <aside className="cost-spend-panel panel"><div className="section-kicker">WORKSPACE TOTAL</div><h2>Total estimated spend</h2><p>Combined estimates for videos saved inside your project folders.</p><div className="cost-spend-total"><span>Sarvam</span><b>{formatEstimate(costEstimateTotals.sarvamInr,'INR')}</b></div><div className="cost-spend-total"><span>Gemini</span><b>{formatEstimate(costEstimateTotals.geminiUsd,'USD')}<small className="cost-converted-value">≈ {usdInrRate === null ? (exchangeRateLoading ? 'Loading rate…' : 'Rate unavailable') : formatEstimate(costEstimateTotals.geminiUsd * usdInrRate,'INR')}</small></b></div><div className="cost-spend-meta"><span>{costEstimateTotals.minutes.toFixed(1)} video minutes</span><b>{costEstimateTotals.estimatedCount} / {costEstimateRows.length} estimated</b></div><div className="cost-total-costing"><span>Total costing</span><b>{usdInrRate === null ? '—' : formatEstimate(costEstimateTotals.sarvamInr + costEstimateTotals.geminiUsd * usdInrRate,'INR')}</b></div><div className="cost-exchange-rate">{usdInrRate === null ? (exchangeRateLoading ? 'Fetching current USD → INR rate…' : 'Exchange rate unavailable right now.') : `Reference rate: 1 USD = ₹${usdInrRate.toFixed(4)}${exchangeRateDate ? ` · ${new Date(exchangeRateDate).toLocaleDateString()}` : ''}`}</div></aside>
             </section>
           </section>}
-          {!costEstimatePage && <section className="welcome-row"><div><h1>{activeFolderId ? folders.find(folder=>folder.id===activeFolderId)?.name : isSarvamWorkflow ? 'Generate with Sarvam' : 'Start a review'}</h1><p className="welcome-subtitle">{activeFolderId ? 'Dub videos and QA findings saved in this project.' : isSarvamWorkflow ? 'Create a dub in your target language, then review it.' : 'Compare an existing dub with its original.'}</p></div><div className="welcome-actions">{activeFolderId && <><button type="button" className="folder-back-button" onClick={()=>{setActiveFolderId(null);setActiveTab('All projects')}}><ArrowLeft size={15}/> Back to projects</button><button type="button" className="folder-rename-trigger" onClick={()=>{setRenameFolderName(folders.find(folder=>folder.id===activeFolderId)?.name || '');setRenameFolderError('');setRenameFolderOpen(true)}}><Pencil size={14}/> Rename folder</button><button type="button" className="folder-delete-trigger" onClick={()=>setFolderDeleteConfirmOpen(true)}><Trash2 size={14}/> Delete folder</button><button ref={costEstimateButtonRef} type="button" className="folder-cost-estimate-trigger" onClick={event=>openCostEstimator(activeFolderId,event.currentTarget)}><Calculator size={15}/> Cost estimate</button></>}<button className="primary-btn" onClick={openActiveWorkflow}>{isSarvamWorkflow ? <SarvamLogoMark/> : <FileAudio size={17}/>} {workflow.action}</button></div></section>}
+          {!costEstimatePage && <section className="welcome-row">
+            <div><h1>{activeFolderId ? activeFolder?.name : isSarvamWorkflow ? 'Generate with Sarvam' : 'Start a review'}</h1><p className="welcome-subtitle">{activeFolderId ? 'Dub videos and QA findings saved in this project.' : isSarvamWorkflow ? 'Create a dub in your target language, then review it.' : 'Compare an existing dub with its original.'}</p></div>
+            <div className="welcome-actions">
+              {activeFolderId && <>
+                <button type="button" className="folder-back-button" onClick={()=>{setActiveFolderId(null);setActiveTab('All projects')}}><ArrowLeft size={15}/> Back to projects</button>
+                {activeFolder?.is_owner && <>
+                  <button type="button" className="folder-share-trigger" onClick={()=>void toggleActiveFolderSharing()} disabled={sharingFolderId===activeFolder.id} aria-pressed={activeFolder.is_shared}>
+                    <Share2 size={14}/>{sharingFolderId===activeFolder.id ? 'Saving…' : activeFolder.is_shared ? 'Shared with all' : 'Share to all'}
+                  </button>
+                  <button type="button" className="folder-rename-trigger" onClick={()=>{setRenameFolderName(activeFolder.name);setRenameFolderError('');setRenameFolderOpen(true)}}><Pencil size={14}/> Rename folder</button>
+                  <button type="button" className="folder-delete-trigger" onClick={()=>setFolderDeleteConfirmOpen(true)}><Trash2 size={14}/> Delete folder</button>
+                </>}
+                <button ref={costEstimateButtonRef} type="button" className="folder-cost-estimate-trigger" onClick={event=>openCostEstimator(activeFolderId,event.currentTarget)}><Calculator size={15}/> Cost estimate</button>
+              </>}
+              <button className="primary-btn" onClick={openActiveWorkflow}>{isSarvamWorkflow ? <SarvamLogoMark/> : <FileAudio size={17}/>} {workflow.action}</button>
+            </div>
+          </section>}
 
-
-      {!costEstimatePage && activeFolderId && <section className="folder-overview-grid" aria-label="Project overview"><IndiaCommunityMapCard projects={folderProjects} compact selectedState={selectedMapState} onStateSelect={setSelectedMapState}/><FeedbackCalendarCard folderId={activeFolderId} formUrl={folders.find(folder => folder.id === activeFolderId)?.feedback_form_url} sheetUrl={folders.find(folder => folder.id === activeFolderId)?.feedback_sheet_url} onSaveFormLinks={saveFolderFeedbackLinks}/></section>}
+      {!costEstimatePage && activeFolderId && <section className="folder-overview-grid" aria-label="Project overview"><IndiaCommunityMapCard projects={folderProjects} compact selectedState={selectedMapState} onStateSelect={setSelectedMapState}/>{activeFolder?.is_owner && <FeedbackCalendarCard folderId={activeFolderId} formUrl={activeFolder.feedback_form_url} sheetUrl={activeFolder.feedback_sheet_url} onSaveFormLinks={saveFolderFeedbackLinks}/>}</section>}
 
       {!costEstimatePage && !activeFolderId && projects.filter(project => !project.isExample).length <= 4 && <section className="qa-flow" aria-labelledby="qa-flow-title"><div className="qa-flow-heading"><div className="qa-flow-title"><span className={`qa-flow-brand${isSarvamWorkflow ? ' sarvam' : ' review'}`}>{isSarvamWorkflow ? <SarvamLogoMark/> : <FileAudio size={19}/>}</span><div><div className="section-kicker">{workflow.eyebrow}</div><h2 id="qa-flow-title">{workflow.title}</h2></div></div><span className="qa-flow-time"><Clock3 size={15}/> 4 steps</span></div><ol className="qa-flow-steps">{workflow.steps.map(([title,description],index)=>{const StepIcon=workflowStepIcons[index];return <li key={title}><span className="qa-step-number">0{index+1}</span><span className="qa-step-icon" aria-hidden="true"><StepIcon size={15}/></span><div><b>{title}</b><p>{description}</p></div></li>})}</ol><button className="qa-flow-action" onClick={openActiveWorkflow}>{isSarvamWorkflow ? <SarvamLogoMark/> : <FileAudio size={16}/>} Open upload <ArrowRight size={15}/></button></section>}
 
@@ -1342,12 +1397,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                     type="button"
                     className={cx('folder-library-card', draggedFolderId === folder.id && 'dragging')}
                     key={folder.id}
-                    draggable
-                    onDragStart={event => startFolderDrag(event, folder.id)}
+                    draggable={folder.is_owner}
+                    onDragStart={event => { if (folder.is_owner) startFolderDrag(event, folder.id); }}
                     onDragEnd={() => { setDraggedFolderId(null); setDragOverVideoType(null); }}
                     onClick={() => { setActiveFolderId(folder.id); setActiveTab('All projects'); }}
                     aria-label={`${folder.name}, ${section.title}. Drag to move to the other format, or open folder.`}
-                  ><Folder size={19}/><span><b>{folder.name}</b><small>{projects.filter(project => project.folderId === folder.id && !project.isExample).length} videos · Drag to move</small></span><ArrowRight size={16}/></button>)}
+                  ><Folder size={19}/><span><b>{folder.name}</b><small>{projects.filter(project => project.folderId === folder.id && !project.isExample).length} videos{folder.is_shared ? ' · Shared with all' : folder.is_owner ? ' · Drag to move' : ''}</small></span><ArrowRight size={16}/></button>)}
                   {!sectionFolders.length && <div className="folder-type-empty">{draggedFolderId ? 'Drop folder here to move it.' : section.empty}</div>}
                 </section>;
               })}

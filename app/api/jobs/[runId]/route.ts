@@ -56,12 +56,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: 'Sign in to view this job.' }, { status: 401 });
-    const jobLookup = supabase.from('qa_jobs').select('id,run_id,project_name,status,report_blob_url,error_message,original_blob_url,dubbed_blob_url,original_b2_key,dubbed_b2_key,report_b2_key,updated_at').eq('user_id', user.id);
+    const jobLookup = supabase.from('qa_jobs').select('id,user_id,run_id,project_name,status,report_blob_url,error_message,original_blob_url,dubbed_blob_url,original_b2_key,dubbed_b2_key,report_b2_key,updated_at');
     const { data: job, error: jobError } = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId)
       ? await jobLookup.eq('id', runId).maybeSingle()
       : await jobLookup.eq('run_id', runId).maybeSingle();
     if (jobError) throw jobError;
-    if (!job) return Response.json({ error: 'This job does not belong to your account.' }, { status: 404 });
+    if (!job) return Response.json({ error: 'This job is not available to your account.' }, { status: 404 });
+    if (job.user_id !== user.id && job.status === 'failed') {
+      return Response.json({
+        runId,
+        status: 'failed',
+        error: job.error_message || 'This job failed.',
+        stage: 'Job failed',
+        originalVideoUrl: job.original_b2_key
+          ? `/api/jobs/${encodeURIComponent(runId)}/b2/media?track=source`
+          : job.original_blob_url ? `/api/jobs/media?runId=${encodeURIComponent(runId)}&url=${encodeURIComponent(job.original_blob_url)}` : null,
+        dubbedVideoUrl: job.dubbed_b2_key
+          ? `/api/jobs/${encodeURIComponent(runId)}/b2/media?track=dub`
+          : job.dubbed_blob_url ? `/api/jobs/media?runId=${encodeURIComponent(runId)}&url=${encodeURIComponent(job.dubbed_blob_url)}` : null,
+      }, { headers: { 'cache-control': 'no-store' } });
+    }
     // The durable workflow may finish before its run metadata is readable again.
     // Supabase already has the durable completion state and private report URL.
     if (job.status === 'completed') {
@@ -112,12 +126,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     if (!(await run.exists)) return Response.json({ error: 'This background job was not found.' }, { status: 404 });
     const status = await run.status;
     if (status !== 'completed') {
-      if (status === 'failed') await supabase.from('qa_jobs').update({ status: 'failed', error_message: 'Background workflow failed. Check Vercel Workflows for its error.' }).eq('user_id', user.id).eq('run_id', runId);
+      if (status === 'failed' && job.user_id === user.id) await supabase.from('qa_jobs').update({ status: 'failed', error_message: 'Background workflow failed. Check Vercel Workflows for its error.' }).eq('user_id', user.id).eq('run_id', runId);
       return Response.json({ runId, status, stage: status === 'failed' ? 'Job failed' : 'Sarvam dubbing and AI QA are running on the server' }, { headers: { 'cache-control': 'no-store' } });
     }
     const result = await run.returnValue as Record<string, any>;
     if (result?.jobError) {
-      await supabase.from('qa_jobs').update({ status: 'failed', error_message: String(result.jobError) }).eq('user_id', user.id).eq('run_id', runId);
+      if (job.user_id === user.id) await supabase.from('qa_jobs').update({ status: 'failed', error_message: String(result.jobError) }).eq('user_id', user.id).eq('run_id', runId);
       return Response.json({ runId, status: 'failed', error: result.jobError, stage: 'Job failed' }, { headers: { 'cache-control': 'no-store' } });
     }
     const completedJob = { ...job, report_blob_url: job.report_blob_url || result?.reportBlobUrl };

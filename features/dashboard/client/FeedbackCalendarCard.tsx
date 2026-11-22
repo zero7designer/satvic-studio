@@ -15,11 +15,11 @@ export type FeedbackEntry = {
   respondent?: string;
 };
 
-type Props = { folderId: string; formUrl?: string | null; sheetUrl?: string | null; onSaveFormLinks?: (formUrl: string, sheetUrl: string) => Promise<void> };
+type Props = { folderId: string; formUrl?: string | null; sheetUrl?: string | null; readOnly?: boolean; onSaveFormLinks?: (formUrl: string, sheetUrl: string) => Promise<void> };
 
 const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-export default function FeedbackCalendarCard({ folderId, formUrl = '', sheetUrl = '', onSaveFormLinks }: Props) {
+export default function FeedbackCalendarCard({ folderId, formUrl = '', sheetUrl = '', readOnly = false, onSaveFormLinks }: Props) {
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formSettingsOpen, setFormSettingsOpen] = useState(false);
@@ -121,7 +121,7 @@ export default function FeedbackCalendarCard({ folderId, formUrl = '', sheetUrl 
   return <article className="feedback-calendar-card" aria-label="Video feedback calendar">
     <header className="feedback-card-heading">
       <div className="feedback-card-title"><span className="feedback-card-icon"><MessageSquare size={16}/></span><div><span className="feedback-card-kicker">VIDEO FEEDBACK</span><h2>Community reports</h2></div></div>
-      <div className="feedback-card-actions">{selectedDate && <button type="button" className="feedback-back-button" onClick={() => setSelectedDate(null)}><ArrowLeft size={13}/> Calendar</button>}<span className="feedback-response-count">{responsesLoading ? <><LoaderCircle size={10} className="feedback-spin"/> Loading</> : `${entries.length} reports`}</span>{sheetUrl && <button type="button" className="feedback-form-edit" aria-label="Refresh form responses" title="Refresh responses from Sheet" onClick={() => void loadResponses()} disabled={responsesLoading}><RefreshCw size={12}/></button>}<button type="button" className="feedback-form-link" onClick={() => { setFormUrlDraft(formUrl || ''); setSheetUrlDraft(sheetUrl || ''); setFormUrlError(''); setFormSettingsOpen(true); }}><Link2 size={12}/>{sheetUrl ? 'Sheet settings' : 'Add response Sheet'}</button></div>
+      <div className="feedback-card-actions">{selectedDate && <button type="button" className="feedback-back-button" onClick={() => setSelectedDate(null)}><ArrowLeft size={13}/> Calendar</button>}<span className="feedback-response-count">{responsesLoading ? <><LoaderCircle size={10} className="feedback-spin"/> Loading</> : `${entries.length} reports`}</span>{sheetUrl && <button type="button" className="feedback-form-edit" aria-label="Refresh form responses" title="Refresh responses from Sheet" onClick={() => void loadResponses()} disabled={responsesLoading}><RefreshCw size={12}/></button>}{!readOnly && <button type="button" className="feedback-form-link" onClick={() => { setFormUrlDraft(formUrl || ''); setSheetUrlDraft(sheetUrl || ''); setFormUrlError(''); setFormSettingsOpen(true); }}><Link2 size={12}/>{sheetUrl ? 'Sheet settings' : 'Add response Sheet'}</button>}</div>
     </header>
 
     {formSettingsOpen && <form className="feedback-form-settings" onSubmit={saveFormUrl}><div className="feedback-form-settings-heading"><b>Feedback links for this folder</b><button type="button" aria-label="Close link settings" onClick={() => setFormSettingsOpen(false)}><X size={14}/></button></div><label>Viewer Google Form URL <small>(optional; where viewers submit)</small><input type="url" value={formUrlDraft} onChange={event => setFormUrlDraft(event.target.value)} placeholder="https://docs.google.com/forms/..." autoFocus /></label><label>Response Sheet URL <input type="url" value={sheetUrlDraft} onChange={event => setSheetUrlDraft(event.target.value)} placeholder="https://docs.google.com/spreadsheets/..." required /></label><small className="feedback-sheet-help">The calendar reads responses from this Sheet. Set General access to “Anyone with the link · Viewer”.</small>{formUrlError && <p role="alert">{formUrlError}</p>}<div className="feedback-form-settings-actions">{(formUrl || sheetUrl) && <button type="button" className="feedback-remove-form" disabled={formUrlSaving} onClick={() => void removeFormUrl()}>Remove links</button>}<button type="submit" disabled={formUrlSaving || !sheetUrlDraft.trim()}>{formUrlSaving ? 'Saving…' : 'Save Sheet'}</button></div></form>}
@@ -135,7 +135,7 @@ export default function FeedbackCalendarCard({ folderId, formUrl = '', sheetUrl 
         {entry.suggestedText && <div className="feedback-entry-field"><small>Suggested correction</small><b>{entry.suggestedText}</b></div>}
         {entry.note && <p className="feedback-entry-note">{entry.note}</p>}
         {entry.respondent && <small className="feedback-respondent">Submitted by {entry.respondent}</small>}
-        <div className="feedback-entry-actions"><button type="button" onClick={() => void markActionTaken(entry)} disabled={actioningEntryId === entry.id || actioningEntryId !== null} aria-busy={actioningEntryId === entry.id}>{actioningEntryId === entry.id ? <><LoaderCircle size={12} className="feedback-spin"/> Saving...</> : 'Taken action'}</button></div>
+        {!readOnly && <div className="feedback-entry-actions"><button type="button" onClick={() => void markActionTaken(entry)} disabled={actioningEntryId === entry.id || actioningEntryId !== null} aria-busy={actioningEntryId === entry.id}>{actioningEntryId === entry.id ? <><LoaderCircle size={12} className="feedback-spin"/> Saving...</> : 'Taken action'}</button></div>}
       </article>)}</div> : <div className="feedback-empty-day"><MessageSquare size={20}/><span>Choose a purple date to view submitted feedback.</span></div>}
     </section> : <>
       <div className="feedback-calendar-toolbar"><button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)}><ChevronLeft size={16}/></button><b>{monthLabel}</b><button type="button" aria-label="Next month" onClick={() => shiftMonth(1)}><ChevronRight size={16}/></button></div>
@@ -150,7 +150,7 @@ export default function FeedbackCalendarCard({ folderId, formUrl = '', sheetUrl 
           return <button type="button" role="gridcell" key={key} className={`feedback-day${count ? ' has-feedback' : ''}${isToday ? ' today' : ''}`} aria-label={`${key}${count ? `, ${count} feedback reports` : ', no feedback'}`} aria-pressed={selectedDate === key} onClick={() => setSelectedDate(key)}><span>{day}</span>{count > 0 && <i>{count > 9 ? '9+' : count}</i>}</button>;
         })}
       </div>
-      {responsesError ? <div className="feedback-connect-hint feedback-load-error"><CalendarDays size={15}/><span>{responsesError}</span><button type="button" onClick={() => void loadResponses()}>Retry</button></div> : !sheetUrl && <div className="feedback-connect-hint"><CalendarDays size={15}/><span>Add this folder’s Google Form and response Sheet links.</span></div>}
+      {responsesError ? <div className="feedback-connect-hint feedback-load-error"><CalendarDays size={15}/><span>{responsesError}</span><button type="button" onClick={() => void loadResponses()}>Retry</button></div> : !sheetUrl && <div className="feedback-connect-hint"><CalendarDays size={15}/><span>{readOnly ? 'The owner has not connected a response Sheet for this shared project yet.' : 'Add this folder’s Google Form and response Sheet links.'}</span></div>}
     </>}
   </article>;
 }

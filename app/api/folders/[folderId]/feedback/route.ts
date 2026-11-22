@@ -52,9 +52,9 @@ export async function GET(_request: Request, context: { params: Promise<{ folder
   try {
     const { folderId } = await context.params;
     const { data: folder, error: folderError } = await supabase.from('qa_folders')
-      .select('id, name, feedback_sheet_url').eq('id', folderId).eq('user_id', user.id).maybeSingle();
+      .select('id, name, user_id, is_shared, feedback_sheet_url').eq('id', folderId).maybeSingle();
     if (folderError) throw folderError;
-    if (!folder) return Response.json({ error: 'This folder was not found in your account.' }, { status: 404 });
+    if (!folder || (folder.user_id !== user.id && !folder.is_shared)) return Response.json({ error: 'This folder is not shared with your account.' }, { status: 404 });
     if (!folder.feedback_sheet_url) return Response.json({ entries: [], configured: false }, { headers: { 'cache-control': 'no-store' } });
 
     const spreadsheetId = folder.feedback_sheet_url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)?.[1];

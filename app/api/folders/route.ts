@@ -13,8 +13,8 @@ export async function GET() {
     const folders = (data || []).map(({ user_id, ...folder }) => ({
       ...folder,
       is_owner: user_id === user.id,
-      feedback_form_url: user_id === user.id ? folder.feedback_form_url : null,
-      feedback_sheet_url: user_id === user.id ? folder.feedback_sheet_url : null,
+      feedback_form_url: user_id === user.id || folder.is_shared ? folder.feedback_form_url : null,
+      feedback_sheet_url: user_id === user.id || folder.is_shared ? folder.feedback_sheet_url : null,
     }));
     return Response.json({ folders }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {

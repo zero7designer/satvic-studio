@@ -1914,13 +1914,27 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell.product-satvic-fluid[data-mode=dark] .status-pill.failed{background:#3d2326!important;color:#ff7b72!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .status-pill.in-progress{background:#302444!important;color:#d2a8ff!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-menu .account-theme-option[aria-checked=true]{border-color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-menu form>button.account-logout{border:1px solid var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:#ff7b72!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch{background:#30363d}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch.active{background:var(--studio-accent)}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch i{background:#e6edf3}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-logout,.app-shell.product-satvic-fluid[data-mode=dark] .account-logout svg{color:#ff7b72!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .workspace-product{color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .rail-notifications:hover,
+.app-shell.product-satvic-fluid[data-mode=dark] .rail-notifications[aria-expanded=true]{background:var(--studio-dark-hover)!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .rail-notifications>span{border-color:var(--studio-dark-sidebar)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .list-footer{border-top:1px solid var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important;color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-table-wrap{border-color:var(--studio-dark-border)!important;scrollbar-color:#484f58 var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-table th{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-table td{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-table tbody tr:hover td{background:var(--studio-dark-hover)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.cost-estimate-header p,.cost-estimate-summary article>span,.cost-estimate-summary article>small,.cost-inline-usd,.cost-estimate-table td:first-child small,.cost-estimate-table .cost-empty,.cost-rate-grid label,.cost-rate-note,.cost-estimate-footer){color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-folder-detail>.cost-estimate-summary .cost-total-card{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .so-india-map svg path{filter:none!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .so-india-map svg path:has(> title[data-selected="true"]){stroke:var(--studio-accent)!important;filter:drop-shadow(0 0 4px var(--studio-accent))!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .so-india-state-list button.active{border-color:var(--studio-accent)!important;background:color-mix(in srgb,var(--studio-accent) 24%,var(--studio-dark-raised))!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .feedback-day{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .feedback-day.today{border-color:#8b949e!important;background:#292f38!important;color:var(--studio-dark-text)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .feedback-day.has-feedback{border-color:var(--studio-accent)!important;background:var(--studio-accent)!important;color:#fff!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .feedback-day.has-feedback>i{background:var(--studio-dark-bg)!important;color:var(--studio-dark-text)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] :is(.modal-backdrop,.folder-create-backdrop,.workflow-project-backdrop,.spotlight-backdrop,.cost-estimate-backdrop){background:rgba(1,4,9,.78)!important}

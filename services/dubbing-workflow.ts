@@ -89,8 +89,14 @@ async function startSarvam(input: JobInput) {
   const jobId = created.data?.job_id;
   const uploadUrl = created.data?.upload_url;
   if (!jobId || !uploadUrl) throw new Error('Sarvam did not return a dubbing job and upload URL.');
-  const upload = await fetch(uploadUrl, { method: 'PUT', body: blob.stream, duplex: 'half', headers: { 'content-type': blob.blob.contentType || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, signal: AbortSignal.timeout(240_000) } as RequestInit & { duplex: 'half' });
-  if (!upload.ok) throw new Error(`Uploading the original to Sarvam failed (${upload.status}).`);
+  // Sarvam's signed storage URL rejects chunked transfer uploads with HTTP 501.
+  // Buffering sets Content-Length, which the signed upload endpoint accepts.
+  const originalBytes = new Uint8Array(await new Response(blob.stream).arrayBuffer());
+  const upload = await fetch(uploadUrl, { method: 'PUT', body: originalBytes, headers: { 'content-type': blob.blob.contentType || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, signal: AbortSignal.timeout(240_000) });
+  if (!upload.ok) {
+    const detail = (await upload.text().catch(() => '')).trim().slice(0, 700);
+    throw new Error(`Uploading the original to Sarvam failed (${upload.status})${detail ? `: ${detail}` : `: ${upload.statusText || 'no provider detail'}`}.`);
+  }
   const started = await fetch(`${SARVAM}/jobs/${encodeURIComponent(jobId)}/start`, { method: 'POST', headers: { 'api-subscription-key': key } });
   const startedBody = await started.json().catch(() => ({}));
   if (!started.ok) throw new Error(`Sarvam could not start dubbing (${started.status}): ${startedBody.message || startedBody.detail || 'Unknown error'}`);

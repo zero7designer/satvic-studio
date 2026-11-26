@@ -36,8 +36,8 @@ function targetLanguageReviewNote(language: string) {
 type Segment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type Transcript = { transcript: string; segments: Segment[]; detectedLanguage: string; engine: string };
 type CompactAudio = { data: string; mime_type: string; durationSeconds?: number };
-type AudioFinding = { severity: 'critical' | 'review' | 'info'; title: string; detail: string; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; sourceStartSegment?: number; sourceEndSegment?: number; dubStartSegment?: number; dubEndSegment?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only' | 'visual-only'; sourceQuote?: string; dubQuote?: string };
-type TranscriptReviewChunk = { id: string; sourceText: string; dubText: string };
+type AudioFinding = { severity: 'critical' | 'review' | 'info'; title: string; detail: string; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; sourceStartSegment?: number; sourceEndSegment?: number; dubStartSegment?: number; dubEndSegment?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only' | 'visual-only'; sourceQuote?: string; dubQuote?: string; backTranslationQuote?: string };
+type TranscriptReviewChunk = { id: string; sourceText: string; dubText: string; backTranslationText: string };
 type QaCheckpoint = {
   kind?: 'qa-checkpoint';
   originalResult?: Transcript;
@@ -57,6 +57,7 @@ type QaCheckpoint = {
   dubAudio?: CompactAudio;
   textFindings?: AudioFinding[];
   textReviewChunks?: Record<string, AudioFinding[]>;
+  textBackTranslations?: Record<string, string>;
   textReviewChunkCount?: number;
   transcriptReviewModels?: string[];
   transcriptComparisonVersion?: number;
@@ -70,13 +71,15 @@ type QaCheckpoint = {
 type Json = Record<string, any>;
 const transcriptFindingsSchema = {
   type: 'object',
-  properties: { findings: { type: 'array', items: { type: 'object', properties: {
+  properties: {
+    backTranslation: { type: 'string' },
+    findings: { type: 'array', items: { type: 'object', properties: {
     severity: { type: 'string', enum: ['critical', 'review', 'info'] }, category: { type: 'string' },
-    title: { type: 'string' }, detail: { type: 'string' }, sourceQuote: { type: 'string' }, dubQuote: { type: 'string' },
+    title: { type: 'string' }, detail: { type: 'string' }, sourceQuote: { type: 'string' }, dubQuote: { type: 'string' }, backTranslationQuote: { type: 'string' },
     sourceStartSegment: { type: ['integer', 'null'] }, sourceEndSegment: { type: ['integer', 'null'] },
     dubStartSegment: { type: ['integer', 'null'] }, dubEndSegment: { type: ['integer', 'null'] },
-  }, required: ['severity', 'category', 'title', 'detail', 'sourceQuote', 'dubQuote'] } } },
-  required: ['findings'],
+  }, required: ['severity', 'category', 'title', 'detail', 'sourceQuote', 'dubQuote', 'backTranslationQuote'] } } },
+  required: ['backTranslation', 'findings'],
 };
 const audioFindingsSchema = {
   type: 'object',
@@ -499,53 +502,82 @@ function phrasesSupportSameFinding(audio: AudioFinding, text: AudioFinding) {
   return overlap(audio.sourceQuote || '', text.sourceQuote || '') && overlap(audio.dubQuote || '', text.dubQuote || '');
 }
 
-function locatePhrase(segments: Segment[], phrase: string) {
-  const words = phrase.toLocaleLowerCase().match(/[\p{L}\p{M}]{2,}/gu) || [];
-  if (!words.length || !segments.length) return { start: undefined, end: undefined };
-  let best = { score: 0, index: 0 };
-  for (let index = 0; index < segments.length; index++) {
-    const text = segments[index].text.toLocaleLowerCase();
-    const hits = words.filter(word => text.includes(word)).length;
-    const score = hits / words.length;
-    if (score > best.score) best = { score, index };
+function locateQuote(segments: Segment[], phrase: string, suggestedStartIndex: unknown) {
+  const phraseTokens = phrase.normalize('NFKC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  if (!phraseTokens.length || !segments.length) return { start: undefined, end: undefined };
+  const transcriptTokens = segments.flatMap((segment, segmentIndex) =>
+    (segment.text.normalize('NFKC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+      .map(token => ({ token, segmentIndex })),
+  );
+  const matches: { first: number; last: number }[] = [];
+  for (let index = 0; index <= transcriptTokens.length - phraseTokens.length; index += 1) {
+    if (phraseTokens.every((token, offset) => transcriptTokens[index + offset].token === token)) {
+      matches.push({ first: transcriptTokens[index].segmentIndex, last: transcriptTokens[index + phraseTokens.length - 1].segmentIndex });
+    }
   }
-  return best.score >= 0.34 ? { start: segments[best.index].start, end: segments[best.index].end } : { start: undefined, end: undefined };
+  if (!matches.length) return { start: undefined, end: undefined };
+  const preferredIndex = Number.isInteger(suggestedStartIndex) ? Number(suggestedStartIndex) : matches[0].first;
+  const match = matches.reduce((closest, candidate) =>
+    Math.abs(candidate.first - preferredIndex) < Math.abs(closest.first - preferredIndex) ? candidate : closest,
+  );
+  return { start: segments[match.first].start, end: segments[match.last].end };
 }
 function buildTranscriptReviewChunks(source: Transcript, dub: Transcript): TranscriptReviewChunk[] {
   const makeTextChunks = () => {
     const chunkSize = 6500;
     const overlap = 900;
+    const stride = chunkSize - overlap;
     const longest = Math.max(source.transcript.length, dub.transcript.length);
-    const count = Math.max(1, Math.ceil(longest / (chunkSize - overlap)));
+    const count = Math.max(1, Math.ceil(longest / stride));
     return Array.from({ length: count }, (_, index) => {
-      const startRatio = Math.max(0, (index * (chunkSize - overlap)) / Math.max(longest, 1));
-      const endRatio = Math.min(1, (index * (chunkSize - overlap) + chunkSize) / Math.max(longest, 1));
+      const startRatio = Math.max(0, (index * stride) / Math.max(longest, 1));
+      const endRatio = Math.min(1, (index * stride + chunkSize) / Math.max(longest, 1));
+      const coreEndRatio = Math.min(1, ((index + 1) * stride) / Math.max(longest, 1));
       const take = (text: string) => text.slice(Math.floor(startRatio * text.length), Math.ceil(endRatio * text.length));
-      return { id: String(index), sourceText: take(source.transcript), dubText: take(dub.transcript) };
+      const backTranslationText = dub.transcript.slice(Math.floor(startRatio * dub.transcript.length), Math.floor(coreEndRatio * dub.transcript.length));
+      return { id: String(index), sourceText: take(source.transcript), dubText: take(dub.transcript), backTranslationText };
     });
   };
   if (!source.segments.length || !dub.segments.length) return makeTextChunks();
 
-  const duration = Math.max(source.segments[source.segments.length - 1]?.end || 0, dub.segments[dub.segments.length - 1]?.end || 0);
-  if (!duration) return makeTextChunks();
+  const sourceDuration = source.segments[source.segments.length - 1]?.end || 0;
+  const dubDuration = dub.segments[dub.segments.length - 1]?.end || 0;
+  const duration = Math.max(sourceDuration, dubDuration);
+  if (!sourceDuration || !dubDuration) return makeTextChunks();
   const chunks: TranscriptReviewChunk[] = [];
   const windowSeconds = 120;
   const stepSeconds = 100;
-  const addWindow = (start: number, end: number) => {
-    const sourceParts = source.segments.map((segment, index) => ({ segment, index })).filter(({ segment }) => segment.end >= start && segment.start <= end);
-    const dubParts = dub.segments.map((segment, index) => ({ segment, index })).filter(({ segment }) => segment.end >= start && segment.start <= end);
+  const addWindow = (progressStart: number, progressEnd: number, coreStart: number, coreEnd: number) => {
+    const sourceStart = progressStart * sourceDuration;
+    const sourceEnd = progressEnd * sourceDuration;
+    const dubStart = progressStart * dubDuration;
+    const dubEnd = progressEnd * dubDuration;
+    const dubCoreStart = coreStart * dubDuration;
+    const dubCoreEnd = coreEnd * dubDuration;
+    const sourceParts = source.segments.map((segment, index) => ({ segment, index })).filter(({ segment }) => segment.end >= sourceStart && segment.start <= sourceEnd);
+    const dubParts = dub.segments.map((segment, index) => ({ segment, index })).filter(({ segment }) => segment.end >= dubStart && segment.start <= dubEnd);
+    const backTranslationParts = dub.segments.map((segment, index) => ({ segment, index }))
+      .filter(({ segment }) => segment.start >= dubCoreStart && (segment.start < dubCoreEnd || coreEnd >= 1 && segment.start <= dubCoreEnd));
     const sourceText = sourceParts.map(({ segment, index }) => `[${index}] ${segment.start.toFixed(1)}-${segment.end.toFixed(1)}s: ${segment.text}`).join('\n');
     const dubText = dubParts.map(({ segment, index }) => `[${index}] ${segment.start.toFixed(1)}-${segment.end.toFixed(1)}s: ${segment.text}`).join('\n');
+    const backTranslationText = backTranslationParts.map(({ segment, index }) => `[${index}] ${segment.start.toFixed(1)}-${segment.end.toFixed(1)}s: ${segment.text}`).join('\n');
     if (!sourceText && !dubText) return;
-    if (sourceText.length + dubText.length > 12000 && end - start > 24) {
-      const midpoint = (start + end) / 2;
-      addWindow(start, Math.min(end, midpoint + 8));
-      addWindow(Math.max(start, midpoint - 8), end);
+    if (sourceText.length + dubText.length > 12000 && (coreEnd - coreStart) * duration > 24) {
+      const midpoint = (coreStart + coreEnd) / 2;
+      const overlap = Math.min(8 / duration, (coreEnd - coreStart) / 4);
+      addWindow(progressStart, Math.min(progressEnd, midpoint + overlap), coreStart, midpoint);
+      addWindow(Math.max(progressStart, midpoint - overlap), progressEnd, midpoint, coreEnd);
       return;
     }
-    chunks.push({ id: String(chunks.length), sourceText, dubText });
+    chunks.push({ id: String(chunks.length), sourceText, dubText, backTranslationText });
   };
-  for (let start = 0; start < duration; start += stepSeconds) addWindow(start, Math.min(duration, start + windowSeconds));
+  const chunkCount = Math.ceil(duration / stepSeconds);
+  for (let index = 0; index < chunkCount; index += 1) {
+    const progressStart = (index * stepSeconds) / duration;
+    const progressEnd = Math.min(1, (index * stepSeconds + windowSeconds) / duration);
+    const coreEnd = Math.min(1, ((index + 1) * stepSeconds) / duration);
+    addWindow(progressStart, progressEnd, progressStart, coreEnd);
+  }
   return chunks.length ? chunks : makeTextChunks();
 }
 function formatSegmentsRange(segments: Segment[], start: number, end: number) {
@@ -568,13 +600,13 @@ function segmentRange(segments: Segment[], startIndex: unknown, endIndex: unknow
   const boundedEnd = Math.max(first, last ?? first);
   return { start: segments[first].start, end: segments[boundedEnd].end };
 }
-async function geminiTranscriptReviewPass(source: Transcript, dub: Transcript, chunk: TranscriptReviewChunk, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>): Promise<AudioFinding[]> {
+async function geminiTranscriptReviewPass(source: Transcript, dub: Transcript, chunk: TranscriptReviewChunk, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>): Promise<{ findings: AudioFinding[]; backTranslation: string }> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for transcript review.');
   const model = process.env.GEMINI_TRANSCRIPT_REVIEW_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
-  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Both passages are Saaras v4 transcripts of the original audio and finished dubbed audio. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. First translate the dubbed transcript passage into ${sourceLanguage} internally, then compare that meaning with the original transcript. Use this Gemini translation as the basis for finding mismatches. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording is correct. These are adjacent timestamped passages; allow for modest timing shifts and use the neighboring overlap. Do not call content missing or added only because it is absent from one passage. Quote the exact original and dubbed Saaras transcript text. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings, with the closest zero-based segment indexes. Return an empty list when no mismatch is evident. JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact dubbed transcript phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
+  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Both passages are Saaras v4 transcripts of the original audio and finished dubbed audio. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. Translate the DUB CORE below into ${sourceLanguage} and return that translation in backTranslation. Keep its original order, but omit segment numbers and timestamps from the translation. Use this Gemini translation to compare meaning with the original transcript. Compare corresponding ideas in narrative order, not merely lines with similar timestamps; the source and dub may speak the same idea at different times. Never pair unrelated source and dub passages. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording is correct. Use the overlapping transcript context to handle timing shifts, but translate only the DUB CORE so adjacent passages do not duplicate evidence. Do not call content missing or added only because it is absent from one passage. Quote exact original and dubbed Saaras transcript text, and return segment indexes that contain those exact quotes. For each finding, include backTranslationQuote: a natural ${sourceLanguage} translation of that exact dubQuote. Use it as the bridge to sourceQuote; do not report a mismatch if the quoted passages are unrelated. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings. Return an empty list when no mismatch is evident. JSON only: {"backTranslation":"dub core translated to source language","findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact dubbed transcript phrase","backTranslationQuote":"dub quote translated to source language","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
 
-SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO TRANSCRIPT (${targetLanguage}):\n${chunk.dubText}`;
+SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO TRANSCRIPT (${targetLanguage}):\n${chunk.dubText}\n\nDUB CORE TO TRANSLATE ONCE (${targetLanguage}):\n${chunk.backTranslationText}`;
   const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 150_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
@@ -585,18 +617,22 @@ SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO T
   try { parsed = JSON.parse(output.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
   catch { throw new Error(`Gemini transcript cross-check returned incomplete or invalid JSON for passage ${Number(chunk.id) + 1}.`); }
   if (!Array.isArray(parsed.findings)) throw new Error(`Gemini transcript cross-check returned invalid findings for passage ${Number(chunk.id) + 1}.`);
+  const backTranslation = typeof parsed.backTranslation === 'string' ? parsed.backTranslation.trim() : '';
+  if (chunk.backTranslationText.trim() && !backTranslation) throw new Error(`Gemini did not return the back-translation for passage ${Number(chunk.id) + 1}.`);
+  if (parsed.findings.some((item: Json) => item?.title && item?.detail && item?.sourceQuote?.trim() && item?.dubQuote?.trim() && !item?.backTranslationQuote?.trim())) {
+    throw new Error(`Gemini returned a transcript finding without back-translation evidence for passage ${Number(chunk.id) + 1}.`);
+  }
   const findingsByKey = new Map<string, AudioFinding>();
-  for (const item of parsed.findings.filter((entry: Json) => entry?.title && entry?.detail && entry?.sourceQuote?.trim() && entry?.dubQuote?.trim() && ['critical', 'review', 'info'].includes(entry.severity))) {
+  for (const item of parsed.findings.filter((entry: Json) => entry?.title && entry?.detail && entry?.sourceQuote?.trim() && entry?.dubQuote?.trim() && entry?.backTranslationQuote?.trim() && ['critical', 'review', 'info'].includes(entry.severity))) {
     const sourceQuote = String(item.sourceQuote).slice(0, 300);
     const dubQuote = String(item.dubQuote).slice(0, 300);
-    const sourceRange = segmentRange(source.segments, item.sourceStartSegment, item.sourceEndSegment, undefined, undefined);
-    const dubRange = segmentRange(dub.segments, item.dubStartSegment, item.dubEndSegment, undefined, undefined);
-    const sourceLocation = sourceRange.start === undefined ? locatePhrase(source.segments, sourceQuote) : sourceRange;
-    const dubLocation = dubRange.start === undefined ? locatePhrase(dub.segments, dubQuote) : dubRange;
-    const finding: AudioFinding = { severity: item.severity, title: String(item.title).slice(0, 140), detail: String(item.detail).slice(0, 1000), category: String(item.category || 'Meaning'), sourceQuote, dubQuote, sourceStart: sourceLocation.start, sourceEnd: sourceLocation.end, dubStart: dubLocation.start, dubEnd: dubLocation.end, evidenceStatus: 'transcript-only' };
+    const backTranslationQuote = String(item.backTranslationQuote).slice(0, 300);
+    const sourceLocation = locateQuote(source.segments, sourceQuote, item.sourceStartSegment);
+    const dubLocation = locateQuote(dub.segments, dubQuote, item.dubStartSegment);
+    const finding: AudioFinding = { severity: item.severity, title: String(item.title).slice(0, 140), detail: String(item.detail).slice(0, 1000), category: String(item.category || 'Meaning'), sourceQuote, dubQuote, backTranslationQuote, sourceStart: sourceLocation.start, sourceEnd: sourceLocation.end, dubStart: dubLocation.start, dubEnd: dubLocation.end, evidenceStatus: 'transcript-only' };
     findingsByKey.set(`${finding.title}|${sourceQuote}|${dubQuote}|${finding.sourceStart ?? ''}|${finding.dubStart ?? ''}`.toLowerCase(), finding);
   }
-  return [...findingsByKey.values()];
+  return { findings: [...findingsByKey.values()], backTranslation };
 }
 async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, sourceAudio: CompactAudio, dubAudio: CompactAudio, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, clipStart: number, clipEnd: number): Promise<AudioFinding[]> {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -803,6 +839,7 @@ export async function POST(request: Request) {
       checkpoint.textFindings = undefined;
       checkpoint.textReviewChunks = {};
       checkpoint.textReviewChunkCount = undefined;
+      checkpoint.textBackTranslations = {};
       checkpoint.transcriptReviewModels = [];
       checkpoint.backTranslation = undefined;
       checkpoint.transcriptComparisonVersion = 7;
@@ -852,11 +889,10 @@ export async function POST(request: Request) {
     if (generatedBySarvam && dubbedScriptResult) checkpoint.dubbedScriptResult = dubbedScriptResult;
     markStage('Preparing transcript and audio evidence');
     updateAnalysisProgress(progressId, stage, 66);
-    const backTranslation = '';
+    let backTranslation = '';
     const [sourceAudio, dubAudio] = checkpoint.sourceAudio && checkpoint.dubAudio
       ? [checkpoint.sourceAudio, checkpoint.dubAudio] as const
       : await Promise.all([extractCompactAudio(original), extractCompactAudio(dubbed)]);
-    checkpoint.backTranslation = '';
     checkpoint.sourceAudio = sourceAudio;
     checkpoint.dubAudio = dubAudio;
     await persistCheckpoint();
@@ -885,35 +921,50 @@ export async function POST(request: Request) {
     const runTranscriptReview = async (sourceTranscript: Transcript, dubTranscript: Transcript) => {
       const chunks = buildTranscriptReviewChunks(sourceTranscript, dubTranscript);
       checkpoint.textReviewChunks ||= {};
+      checkpoint.textBackTranslations ||= {};
       if (checkpoint.textReviewChunkCount !== chunks.length) {
         checkpoint.textReviewChunks = {};
+        checkpoint.textBackTranslations = {};
         checkpoint.textReviewChunkCount = chunks.length;
         checkpoint.textReviewComplete = false;
         checkpoint.textFindings = [];
       }
-      if (checkpoint.textReviewComplete && chunks.every(chunk => Object.prototype.hasOwnProperty.call(checkpoint.textReviewChunks, chunk.id))) {
+      const chunkHasResult = (chunk: TranscriptReviewChunk) =>
+        Object.prototype.hasOwnProperty.call(checkpoint.textReviewChunks, chunk.id)
+        && typeof checkpoint.textBackTranslations?.[chunk.id] === 'string';
+      if (checkpoint.textReviewComplete && chunks.every(chunkHasResult)) {
         textFindings = checkpoint.textFindings || [];
+        checkpoint.backTranslation = chunks.map(chunk => checkpoint.textBackTranslations?.[chunk.id] || '').filter(Boolean).join('\n');
+        backTranslation = checkpoint.backTranslation;
         transcriptCrossCheckAvailable = true;
         transcriptCrossCheckError = null;
         return;
       }
+      checkpoint.backTranslation = undefined;
+      backTranslation = '';
       checkpoint.textReviewAttempted = true;
       checkpoint.transcriptCrossCheckError = null;
       await persistCheckpoint();
       try {
         for (const [index, chunk] of chunks.entries()) {
-          if (Object.prototype.hasOwnProperty.call(checkpoint.textReviewChunks, chunk.id)) continue;
+          if (chunkHasResult(chunk)) continue;
           markStage(`Gemini transcript review ${index + 1}/${chunks.length}`);
           updateAnalysisProgress(progressId, stage, Math.min(95, 82 + Math.floor((index / chunks.length) * 12)));
-          checkpoint.textReviewChunks[chunk.id] = await geminiTranscriptReviewPass(sourceTranscript, dubTranscript, chunk, sourceLanguage, targetLanguage, transcriptModelsUsed);
+          const result = await geminiTranscriptReviewPass(sourceTranscript, dubTranscript, chunk, sourceLanguage, targetLanguage, transcriptModelsUsed);
+          checkpoint.textReviewChunks[chunk.id] = result.findings;
+          checkpoint.textBackTranslations[chunk.id] = result.backTranslation;
           checkpoint.transcriptReviewModels = [...transcriptModelsUsed];
           const allFindings = Object.values(checkpoint.textReviewChunks).flat();
           textFindings = [...new Map(allFindings.map(item => [`${item.title}|${item.sourceQuote}|${item.dubQuote}|${item.sourceStart ?? ''}|${item.dubStart ?? ''}`.toLowerCase(), item] as const)).values()];
           checkpoint.textFindings = textFindings;
           await persistCheckpoint();
         }
-        checkpoint.textReviewComplete = chunks.every(chunk => Object.prototype.hasOwnProperty.call(checkpoint.textReviewChunks, chunk.id));
+        checkpoint.textReviewComplete = chunks.every(chunkHasResult);
         transcriptCrossCheckAvailable = checkpoint.textReviewComplete;
+        if (checkpoint.textReviewComplete) {
+          checkpoint.backTranslation = chunks.map(chunk => checkpoint.textBackTranslations?.[chunk.id] || '').filter(Boolean).join('\n');
+          backTranslation = checkpoint.backTranslation;
+        }
         transcriptCrossCheckError = null;
         checkpoint.transcriptCrossCheckError = null;
         if (!checkpoint.textReviewComplete) throw new Error('Gemini transcript cross-check did not review every transcript passage.');

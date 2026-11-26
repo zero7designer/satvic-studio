@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, AudioLines, Bell, Calculator, Check, CheckCheck, ChevronDown,
-  LogOut, Menu,
-  Palette, PanelLeftClose,
-  PanelLeftOpen, Plus, Settings, Trash2, X, type LucideIcon,
+  LogOut, Menu, Moon, Palette, PanelLeftClose,
+  PanelLeftOpen, Plus, Sun, Trash2, X, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
 import { getProduct, products, type ProductFeature, type ProductId } from '@/features/products/registry';
@@ -24,7 +23,6 @@ type ProductDashboardShellProps = {
   productId: ProductId;
   accountEmail: string;
   accountAvatar?: string;
-  onNotice: (message: string) => void;
   onFeatureSelect?: (featureId: string) => void;
   initialFeatureId?: string;
   hideFeatureNavigation?: boolean;
@@ -44,7 +42,6 @@ export default function ProductDashboardShell({
   productId,
   accountEmail,
   accountAvatar = 'sage',
-  onNotice,
   onFeatureSelect,
   initialFeatureId,
   hideFeatureNavigation = false,
@@ -58,8 +55,10 @@ export default function ProductDashboardShell({
   const [featureRailCollapsed, setFeatureRailCollapsed] = useState(false);
   const [productMenuOpen, setProductMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [appThemeOpen, setAppThemeOpen] = useState(false);
   const [dashboardTheme, setDashboardTheme] = useState<DashboardTheme>('sage');
-  const [themeLoaded, setThemeLoaded] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<'light' | 'dark'>('light');
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -69,13 +68,29 @@ export default function ProductDashboardShell({
 
   useEffect(() => {
     const savedTheme = dashboardThemes.find(option => option.id === window.localStorage.getItem('satvic-studio-dashboard-theme'));
+    const savedMode = window.localStorage.getItem('satvic-studio-dashboard-mode');
     if (savedTheme) setDashboardTheme(savedTheme.id);
-    setThemeLoaded(true);
+    if (savedMode === 'dark' || savedMode === 'light') setDashboardMode(savedMode);
+    setPreferencesLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (themeLoaded) window.localStorage.setItem('satvic-studio-dashboard-theme', dashboardTheme);
-  }, [dashboardTheme, themeLoaded]);
+    if (!preferencesLoaded) return;
+    window.localStorage.setItem('satvic-studio-dashboard-theme', dashboardTheme);
+    window.localStorage.setItem('satvic-studio-dashboard-mode', dashboardMode);
+  }, [dashboardMode, dashboardTheme, preferencesLoaded]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousColorScheme = root.style.colorScheme;
+    const previousBodyBackground = document.body.style.backgroundColor;
+    root.style.colorScheme = dashboardMode;
+    document.body.style.backgroundColor = dashboardMode === 'dark' ? '#141914' : '';
+    return () => {
+      root.style.colorScheme = previousColorScheme;
+      document.body.style.backgroundColor = previousBodyBackground;
+    };
+  }, [dashboardMode]);
 
   useEffect(() => {
     const requested = searchParams.get('feature') || (productId === 'satvic-fluid' && searchParams.has('qaRunId') ? 'start-review' : null);
@@ -86,7 +101,10 @@ export default function ProductDashboardShell({
   }, [onFeatureSelect, product.groups, productId, searchParams]);
 
   useEffect(() => {
-    if (!accountMenuOpen) return;
+    if (!accountMenuOpen) {
+      setAppThemeOpen(false);
+      return;
+    }
     const closeOnOutsideClick = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Element && !target.closest('.account-menu, .account-trigger, .rail-account, .rail-account-collapsed, .drawer-account')) setAccountMenuOpen(false);
@@ -186,7 +204,7 @@ export default function ProductDashboardShell({
   }
 
   return (
-    <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`} data-theme={dashboardTheme}>
+    <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`} data-theme={dashboardTheme} data-mode={dashboardMode}>
       <nav className={`product-rail${productMenuOpen ? ' product-rail-expanded' : ''}`} aria-label="Satvic products">
         <button type="button" className="rail-workspace" aria-label="Open product menu" aria-haspopup="true" aria-expanded={productMenuOpen} title="Satvic Studio and tools" onClick={() => { setProductMenuOpen(open => !open); setAccountMenuOpen(false); setNotificationOpen(false); }}>
           <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
@@ -228,7 +246,12 @@ export default function ProductDashboardShell({
         {featureRailCollapsed && <button type="button" className="rail-account feature-rail-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)} title={accountName}><span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span></button>}
       </aside>
 
-      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu"><div className="account-theme-picker" role="group" aria-labelledby="account-theme-heading"><div className="account-theme-heading" id="account-theme-heading"><Palette size={16}/><span>Color theme</span></div><div className="account-theme-options">{dashboardThemes.map(option => <button type="button" role="menuitemradio" aria-checked={dashboardTheme === option.id} className="account-theme-option" key={option.id} onClick={() => setDashboardTheme(option.id)}><span className={`account-theme-swatch ${option.id}`}/><span>{option.label}</span>{dashboardTheme === option.id && <Check size={14}/>}</button>)}</div></div><button role="menuitem" onClick={() => {setAccountMenuOpen(false);onNotice('Account settings are ready for this workspace.')}}><Settings size={18} /><span>Settings</span></button><form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={18} /><span>Logout</span></PendingSubmitButton></form></div>}
+      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu">
+        <button type="button" role="menuitem" className="account-menu-option" aria-expanded={appThemeOpen} aria-controls={appThemeOpen ? 'account-app-theme-options' : undefined} onClick={() => setAppThemeOpen(open => !open)}><Palette size={17}/><span>App theme</span><ChevronDown className={appThemeOpen ? 'account-theme-chevron open' : 'account-theme-chevron'} size={15}/></button>
+        {appThemeOpen && <div className="account-theme-options" id="account-app-theme-options" role="radiogroup" aria-label="Choose an app color theme">{dashboardThemes.map(option => <button type="button" role="radio" aria-checked={dashboardTheme === option.id} className="account-theme-option" key={option.id} onClick={() => setDashboardTheme(option.id)} aria-label={`${option.label} app theme`} title={option.label}><span className={`account-theme-swatch ${option.id}`}>{dashboardTheme === option.id && <Check size={11}/>}</span></button>)}</div>}
+        <button type="button" role="switch" aria-checked={dashboardMode === 'dark'} className="account-menu-option account-mode-option" onClick={() => setDashboardMode(mode => mode === 'dark' ? 'light' : 'dark')}><span className="account-mode-icon">{dashboardMode === 'dark' ? <Moon size={16}/> : <Sun size={16}/>}</span><span>{dashboardMode === 'dark' ? 'Dark mode' : 'Light mode'}</span><span className={`account-mode-switch${dashboardMode === 'dark' ? ' active' : ''}`} aria-hidden="true"><i/></span></button>
+        <form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={17} /><span>Log out</span></PendingSubmitButton></form>
+      </div>}
 
       <section className="main-area">
         <header className="topbar"><button className="icon-btn menu-trigger" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Menu size={19} /></button></header>

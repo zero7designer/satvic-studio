@@ -1343,7 +1343,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       productId="satvic-fluid"
       accountEmail={accountEmail}
       accountAvatar={initialAccountAvatar}
-      onNotice={setNotice}
       initialFeatureId="generate-sarvam"
       onFeatureSelect={(featureId) => {
         if (featureId === 'cost-estimate') {

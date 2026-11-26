@@ -194,7 +194,9 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
   }
   const report = { ...body, generatedBySarvam: true, originalVideoUrl: input.originalBlobUrl, dubbedVideoUrl: dubbedBlobUrl };
   const storedReport = await put(`satvic-users/${input.userId}/satvic-jobs/${crypto.randomUUID()}-qa-report.json`, JSON.stringify(report), { access: 'private', contentType: 'application/json', addRandomSuffix: true });
-  return { reportBlobUrl: storedReport.url, dubbedBlobUrl, issueCount: Array.isArray(body.findings) ? body.findings.length : 0 };
+  const reviewComplete = body.reviewComplete === true;
+  const reviewWarning = reviewComplete ? null : body.transcriptCrossCheckError || (Array.isArray(body.reviewCoverageWarnings) ? body.reviewCoverageWarnings.join(' ') : '') || 'The transcript cross-check or timing coverage did not complete.';
+  return { reportBlobUrl: storedReport.url, dubbedBlobUrl, issueCount: Array.isArray(body.findings) ? body.findings.length : 0, reviewComplete, reviewWarning };
 }
 
 async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null) {
@@ -258,8 +260,8 @@ export async function generateAndReview(input: JobInput) {
       await sendJobEmail(input, 'failed', result.jobError);
       return result;
     }
-    await updateHistory(input, { dubbed_blob_url: result.dubbedBlobUrl, report_blob_url: result.reportBlobUrl, status: 'completed', issue_count: result.issueCount, error_message: null });
-    await sendJobEmail(input, 'completed', 'The dubbed video and QA report are ready in Satvic Studio.');
+    await updateHistory(input, { dubbed_blob_url: result.dubbedBlobUrl, report_blob_url: result.reportBlobUrl, status: 'completed', issue_count: result.issueCount, error_message: result.reviewComplete ? null : `QA review incomplete: ${result.reviewWarning}` });
+    await sendJobEmail(input, 'completed', result.reviewComplete ? 'The dubbed video and QA report are ready in Satvic Studio.' : `The audio review finished, but the transcript cross-check or coverage is incomplete: ${result.reviewWarning}`);
     return result;
   } catch (error) {
     console.info(`[dubbing-workflow] job=${input.dbJobId} failedPhaseDurationMs=${Date.now() - phaseStartedAt} totalDurationMs=${Date.now() - workflowStartedAt}`);
@@ -281,8 +283,8 @@ export async function retryQualityReview(input: JobInput & { dubbedBlobUrl: stri
       await sendJobEmail(input, 'failed', result.jobError);
       return result;
     }
-    await updateHistory(input, { dubbed_blob_url: input.dubbedBlobUrl, report_blob_url: result.reportBlobUrl, status: 'completed', issue_count: result.issueCount, error_message: null });
-    await sendJobEmail(input, 'completed', 'The QA report for your saved Sarvam dub is ready in Satvic Studio.');
+    await updateHistory(input, { dubbed_blob_url: input.dubbedBlobUrl, report_blob_url: result.reportBlobUrl, status: 'completed', issue_count: result.issueCount, error_message: result.reviewComplete ? null : `QA review incomplete: ${result.reviewWarning}` });
+    await sendJobEmail(input, 'completed', result.reviewComplete ? 'The QA report for your saved Sarvam dub is ready in Satvic Studio.' : `The audio review finished, but the transcript cross-check or coverage is incomplete: ${result.reviewWarning}`);
     return result;
   } catch (error) {
     const jobError = errorText(error);

@@ -53,6 +53,8 @@ type QaCheckpoint = {
   sourceAudio?: { data: string; mime_type: string };
   dubAudio?: { data: string; mime_type: string };
   textFindings?: AudioFinding[];
+  transcriptReviewModels?: string[];
+  transcriptComparisonVersion?: number;
   audioFindings?: AudioFinding[];
   textReviewComplete?: boolean;
   textReviewAttempted?: boolean;
@@ -362,7 +364,7 @@ async function geminiRequest(body: Json, key: string, timeoutMs: number) {
           await new Promise(resolve => setTimeout(resolve, pauseMs));
           continue;
         }
-        if ([429, 500, 502, 503, 504].includes(response.status) && model !== models[models.length - 1]) {
+        if ([403, 404, 429, 500, 502, 503, 504].includes(response.status) && model !== models[models.length - 1]) {
           await response.body?.cancel();
           break;
         }
@@ -470,24 +472,20 @@ function segmentRange(segments: Segment[], startIndex: unknown, endIndex: unknow
   const boundedEnd = Math.max(first, last ?? first);
   return { start: segments[first].start, end: segments[boundedEnd].end };
 }
-async function geminiTranscriptReview(source: Transcript, dub: Transcript, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, dubScript?: Transcript): Promise<AudioFinding[]> {
+async function geminiTranscriptReview(source: Transcript, dub: Transcript, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>): Promise<AudioFinding[]> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for transcript review.');
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
+  const model = process.env.GEMINI_TRANSCRIPT_REVIEW_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
   const sourceText = formatSegments(source.segments) || source.transcript.slice(0, 14000);
   const dubText = formatSegments(dub.segments) || dub.transcript.slice(0, 14000);
-  const dubScriptText = dubScript ? (formatSegments(dubScript.segments) || dubScript.transcript.slice(0, 14000)) : '';
-  const prompt = `Compare the COMPLETE source and dub transcripts for this dubbing QA. Source language: ${sourceLanguage}. Dub language: ${targetLanguage}. Read both full transcripts in order and compare each idea with the corresponding idea wherever it appears. The dub may speak a translated sentence earlier or later than the source, so do not compare only equal timestamps and do not call content missing or added until you have checked the ENTIRE other transcript. Check every number and unit in context, changed food names, omissions/additions, negation, instructions, and below/above-limit claims. Flag clear English words or phrases left in the dub instead of the selected target language as Language mixing; ignore names, brands, and common loanwords normally used in that language. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Natural rewording is correct. Return EVERY distinct real issue, including repeated issues at different places. Each finding must quote the exact source wording and exact dub wording and include the closest zero-based segment indexes from the supplied lists. If you cannot find a concrete source/dub difference in the full transcripts, do not report it. Do not infer pronunciation or accent from text. Return JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation: what the source says and what the dub says","sourceQuote":"exact short source phrase","dubQuote":"exact short dub phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. Return an empty findings list if no concrete mismatch appears.
+  const prompt = `Compare the COMPLETE Gemini transcript of the original audio with the Sarvam dub-language script for this dubbing QA. Source language: ${sourceLanguage}. Dub language: ${targetLanguage}. The SOURCE transcript was transcribed from the original audio by Gemini. The DUB transcript is Sarvam's generated SRT script. This is the transcript check: compare the source meaning with the dub script for omissions, additions, changed names/numbers, negation, instructions, and other translation mistakes. The separate audio check reviews the original and dubbed audio tracks directly. Read both full transcripts in order and compare each idea wherever it appears. The dub may speak a translated sentence earlier or later than the source, so do not compare only equal timestamps and do not call content missing or added until you have checked the ENTIRE other transcript. Check every number and unit in context, changed food names, omissions/additions, negation, instructions, and below/above-limit claims. Flag clear English words or phrases left in the dub instead of the selected target language as Language mixing; ignore names, brands, and common loanwords normally used in that language. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Natural rewording is correct. Return EVERY distinct real issue, including repeated issues at different places. Each finding must quote the exact source wording and exact dub-script wording and include the closest zero-based segment indexes from the supplied lists. If you cannot find a concrete source/dub difference in the full transcripts, do not report it. Do not infer pronunciation or accent from text. Return JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation: what the source says and what the dub script says","sourceQuote":"exact short source phrase","dubQuote":"exact short dub-script phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. Return an empty findings list if no concrete mismatch appears.
 
 SOURCE (${sourceLanguage}) — complete ordered transcript segments:
 ${sourceText}
 
 DUB (${targetLanguage}) — complete ordered transcript segments:
 ${dubText}`;
-  const promptWithScript = dubScriptText
-    ? `${prompt}\n\nSARVAM DUB SRT (${targetLanguage}) - supporting script reference only; the finished dubbed audio is authoritative:\n${dubScriptText}`
-    : prompt;
-  const response = await geminiRequest({ model, input: promptWithScript, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 8192 } }, key, 150_000);
+  const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 8192 } }, key, 150_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
   const payload = await response.json().catch(() => ({}));
@@ -730,9 +728,12 @@ export async function POST(request: Request) {
     }
     if (!generatedBySarvam && (!originalResult || !dubbedResult)) throw new Error('Sarvam did not return both source and dubbed transcripts.');
     if (!generatedBySarvam) dubbedScriptResult ||= dubbedResult;
-    if (generatedBySarvam && !checkpoint.audioTranscriptChunks) {
+    if (generatedBySarvam && checkpoint.transcriptComparisonVersion !== 2) {
       checkpoint.textReviewComplete = false;
       checkpoint.textReviewAttempted = false;
+      checkpoint.textFindings = undefined;
+      checkpoint.transcriptReviewModels = [];
+      checkpoint.transcriptComparisonVersion = 2;
     }
     if (generatedBySarvam && dubbedScriptResult) checkpoint.dubbedScriptResult = dubbedScriptResult;
     markStage('Preparing transcript and audio evidence');
@@ -752,7 +753,7 @@ export async function POST(request: Request) {
     markStage('Gemini checking transcript and audio in parallel');
     updateAnalysisProgress(progressId, stage, 82);
     let textFindings: AudioFinding[] = checkpoint.textFindings || [];
-    const transcriptModelsUsed = new Set<string>();
+    const transcriptModelsUsed = new Set<string>(checkpoint.transcriptReviewModels || []);
     const audioModelsUsed = new Set<string>(checkpoint.audioReviewModels || []);
     let transcriptCrossCheckAvailable = checkpoint.textReviewComplete === true;
     let transcriptCrossCheckError: string | null = checkpoint.transcriptCrossCheckError || null;
@@ -760,7 +761,7 @@ export async function POST(request: Request) {
     const emptySourceTranscript: Transcript = { transcript: '', segments: [], detectedLanguage: source.sarvam, engine: 'Gemini audio transcription pending' };
     const sourceForAudio = originalResult || emptySourceTranscript;
     const dubScriptForAudio = dubbedScriptResult || dubbedResult!;
-    const runTranscriptReview = async (sourceTranscript: Transcript, dubTranscript: Transcript, scriptReference?: Transcript) => {
+    const runTranscriptReview = async (sourceTranscript: Transcript, dubTranscript: Transcript) => {
       if (checkpoint.textReviewComplete) {
         textFindings = checkpoint.textFindings || [];
         transcriptCrossCheckAvailable = true;
@@ -771,8 +772,9 @@ export async function POST(request: Request) {
       checkpoint.transcriptCrossCheckError = null;
       await persistCheckpoint();
       try {
-        textFindings = await geminiTranscriptReview(sourceTranscript, dubTranscript, sourceLanguage, targetLanguage, transcriptModelsUsed, scriptReference);
+        textFindings = await geminiTranscriptReview(sourceTranscript, dubTranscript, sourceLanguage, targetLanguage, transcriptModelsUsed);
         checkpoint.textFindings = textFindings;
+        checkpoint.transcriptReviewModels = [...transcriptModelsUsed];
         checkpoint.textReviewComplete = true;
         checkpoint.transcriptCrossCheckError = null;
         transcriptCrossCheckAvailable = true;
@@ -836,10 +838,10 @@ export async function POST(request: Request) {
       checkpoint.originalResult = originalResult;
       checkpoint.dubbedAudioResult = dubbedResult;
       await persistCheckpoint();
-      if (originalResult.transcript && dubbedResult.transcript) await runTranscriptReview(originalResult, dubbedResult, dubbedScriptResult);
+      if (originalResult.transcript && dubbedScriptResult?.transcript) await runTranscriptReview(originalResult, dubbedScriptResult);
       else {
         transcriptCrossCheckAvailable = false;
-        transcriptCrossCheckError = 'Gemini could not produce both spoken transcripts from the audio.';
+        transcriptCrossCheckError = 'Gemini could not produce the original transcript or Sarvam dub script for text comparison.';
       }
     } else {
       if (!originalResult || !dubbedResult) throw new Error('Both source and dubbed transcripts are required for QA.');
@@ -865,6 +867,10 @@ export async function POST(request: Request) {
       ...audioFindings,
       ...unmatchedTextFindings,
     ];
+    const transcriptReviewer = [...transcriptModelsUsed].join(', ');
+    if (!combinedFindings.length && transcriptCrossCheckAvailable && (!transcriptReviewer || /lite/i.test(transcriptReviewer))) {
+      reviewCoverageWarnings.push('Gemini Flash Lite or an unrecorded reviewer returned no findings. This is not a reliable clean verdict; use a stronger transcript-review model or manually check the report transcripts and audio.');
+    }
     markStage('Finishing the timestamped report');
     updateAnalysisProgress(progressId, stage, 97);
     updateAnalysisProgress(progressId, 'Analysis complete', 100, 'complete');
@@ -885,7 +891,7 @@ export async function POST(request: Request) {
       originalSegments: originalResult.segments, dubbedSegments: dubbedResult.segments,
       timestampsAvailable: originalResult.segments.length > 0 && dubbedResult.segments.length > 0,
       transcriptionEngine: originalResult.engine === dubbedResult.engine ? originalResult.engine : `${originalResult.engine} · ${dubbedResult.engine}`,
-      semanticReviewEngine: process.env.GEMINI_API_KEY ? `${[...transcriptModelsUsed].join(', ') || process.env.GEMINI_MODEL || 'gemini-3.8-flash'} transcript review` : null,
+      semanticReviewEngine: process.env.GEMINI_API_KEY ? `${[...transcriptModelsUsed].join(', ') || process.env.GEMINI_TRANSCRIPT_REVIEW_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash'} transcript review` : null,
       disclaimer: 'The AI listens to both audio tracks and reports suspected issues with time ranges. Treat these as review findings, not a guarantee: speech recognition and audio models can miss mistakes or infer words incorrectly.',
     };
     if (historyJobId && historySupabase) {

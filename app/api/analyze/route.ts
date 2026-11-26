@@ -836,10 +836,11 @@ export async function POST(request: Request) {
   } catch (error) {
     console.info(`[api/analyze] stage=${stage} failedAfterMs=${Date.now() - stageStartedAt}`);
     const message = error instanceof Error ? error.message : providerError(error as Json);
-    const noSarvamCredits = /returned 402|No credits available|credits available|insufficient credits/i.test(message);
-    const resumableProviderIssue = !noSarvamCredits && /timeout|timed out|deadline|rate.?limit|returned 429|still processing|job_state=/i.test(message);
-    const visibleMessage = noSarvamCredits
-      ? `Sarvam transcription could not start because the Sarvam account has no available credits (HTTP 402). Your saved dub is safe. Add credits in the Sarvam dashboard, then retry QA; no dubbing job will be started again.`
+    const sarvamPaymentIssue = /Sarvam .* returned 402|returned 402/i.test(message);
+    const resumableProviderIssue = !sarvamPaymentIssue && /timeout|timed out|deadline|rate.?limit|returned 429|still processing|job_state=/i.test(message);
+    const sarvam402Detail = message.replace(/^.*?returned 402:\s*/i, '').trim().slice(0, 700);
+    const visibleMessage = sarvamPaymentIssue
+      ? `Sarvam rejected the transcription request (HTTP 402)${sarvam402Detail ? `: ${sarvam402Detail}` : '.'} Check that SARVAM_API_KEY in this Vercel environment belongs to the account with credits and has transcription access. Your saved dub is safe; retry QA after resolving the Sarvam response.`
       : message;
     if (historyJobId && historySupabase) {
       await historySupabase.from('qa_jobs').update({ status: resumableProviderIssue ? 'running' : 'failed', error_message: visibleMessage.slice(0, 2000), updated_at: new Date().toISOString() }).eq('id', historyJobId);
@@ -855,7 +856,7 @@ export async function POST(request: Request) {
     }
     updateAnalysisProgress(progressId, 'Analysis stopped', 100, 'error', visibleMessage);
     console.error(`[api/analyze] ${stage} failed: ${visibleMessage || 'Unknown analysis error.'}`);
-    const status = noSarvamCredits ? 402 : /rate.?limit|returned 429/i.test(message) ? 429 : resumableProviderIssue ? 504 : /returned 503/.test(message) ? 503 : 502;
+    const status = sarvamPaymentIssue ? 402 : /rate.?limit|returned 429/i.test(message) ? 429 : resumableProviderIssue ? 504 : /returned 503/.test(message) ? 503 : 502;
     return NextResponse.json({ error: `${resumableProviderIssue ? 'QA checkpoint retry: ' : ''}${stage}: ${visibleMessage || 'Unknown analysis error.'}` }, { status });
   }
 }

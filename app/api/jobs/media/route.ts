@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     if (!result) return Response.json({ error: 'This video may have expired after the 24-hour media retention period.' }, { status: 404 });
     const headers = new Headers({
       'content-type': result.blob.contentType || 'application/octet-stream',
-      'cache-control': 'private, no-store',
+      'cache-control': 'private, max-age=60',
       'accept-ranges': result.headers.get('accept-ranges') || 'bytes',
       'x-content-type-options': 'nosniff',
     });

@@ -134,11 +134,6 @@ export default function ProductDashboardShell({
   }, []);
 
   useEffect(() => {
-    router.prefetch('/dashboard/satvic-fluid');
-    products.forEach(item => router.prefetch(item.href));
-  }, [router]);
-
-  useEffect(() => {
     if (productId === 'founder-office' && !founderOfficeEnabled) {
       startNavigationLoading();
       router.replace('/dashboard/satvic-fluid');
@@ -191,9 +186,14 @@ export default function ProductDashboardShell({
 
   useEffect(() => {
     void loadNotifications();
-    const timer = window.setInterval(() => { void loadNotifications(); }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [loadNotifications]);
+    const onFocus = () => { void loadNotifications(); };
+    window.addEventListener('focus', onFocus);
+    const timer = notificationOpen ? window.setInterval(() => { void loadNotifications(); }, 60_000) : null;
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      if (timer) window.clearInterval(timer);
+    };
+  }, [loadNotifications, notificationOpen]);
 
   async function dismissNotification(item: DashboardNotification) {
     setFollowingNotificationId(item.id);
@@ -230,7 +230,7 @@ export default function ProductDashboardShell({
           </button>)}
         </div>
         <div className="rail-spacer" />
-        <button type="button" className="rail-notifications" aria-label={`Notifications, ${visibleNotifications.length} items`} aria-expanded={notificationOpen} title="Notifications" onClick={() => { setProductMenuOpen(false); setAccountMenuOpen(false); setNotificationOpen(true); void loadNotifications(); }}>
+        <button type="button" className="rail-notifications" aria-label={`Notifications, ${visibleNotifications.length} items`} aria-expanded={notificationOpen} title="Notifications" onClick={() => { setProductMenuOpen(false); setAccountMenuOpen(false); setNotificationOpen(true); }}>
           <Bell size={19}/>{visibleNotifications.length > 0 && <span>{visibleNotifications.length > 9 ? '9+' : visibleNotifications.length}</span>}
         </button>
         <button type="button" className="rail-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => { setProductMenuOpen(false); setAccountMenuOpen(open => !open); }} title={accountName}>

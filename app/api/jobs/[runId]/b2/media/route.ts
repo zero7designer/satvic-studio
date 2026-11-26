@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ runI
     const range = request.headers.get('range') || undefined;
     const media = await getB2Client().send(new GetObjectCommand({ Bucket: config.bucket, Key: key, Range: range }));
     if (!media.Body) return Response.json({ error: 'Backblaze B2 returned an empty media object.' }, { status: 502 });
-    const headers = new Headers({ 'content-type': media.ContentType || 'video/mp4', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' });
+    const headers = new Headers({ 'content-type': media.ContentType || 'video/mp4', 'cache-control': 'private, max-age=60', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' });
     if (media.ContentLength !== undefined) headers.set('content-length', String(media.ContentLength));
     if (media.ContentRange) headers.set('content-range', media.ContentRange);
     return new Response(media.Body.transformToWebStream(), { status: range ? 206 : 200, headers });

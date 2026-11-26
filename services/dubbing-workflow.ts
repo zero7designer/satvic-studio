@@ -9,6 +9,7 @@ type JobInput = {
   originalName: string;
   sourceLanguage: string;
   targetLanguage: string;
+  speakerCount?: number;
   projectName: string;
   dbJobId: string;
   userId: string;
@@ -80,17 +81,16 @@ async function startSarvam(input: JobInput) {
   if (!key) throw new Error('SARVAM_API_KEY is not configured in Vercel.');
   const blob = await get(input.originalBlobUrl, { access: 'private' });
   if (!blob) throw new Error('The uploaded source video could not be found in Blob storage.');
-  const bytes = new Uint8Array(await new Response(blob.stream).arrayBuffer());
   const createdResponse = await fetch(`${SARVAM}/jobs`, {
     method: 'POST', headers: { 'api-subscription-key': key, 'content-type': 'application/json' },
-    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, num_speakers: 1, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
+    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, num_speakers: input.speakerCount ?? 2, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
   });
   const created = await createdResponse.json().catch(() => ({}));
   if (!createdResponse.ok) throw new Error(`Sarvam could not create the dubbing job (${createdResponse.status}): ${created.message || created.detail || 'Unknown error'}`);
   const jobId = created.data?.job_id;
   const uploadUrl = created.data?.upload_url;
   if (!jobId || !uploadUrl) throw new Error('Sarvam did not return a dubbing job and upload URL.');
-  const upload = await fetch(uploadUrl, { method: 'PUT', body: bytes, headers: { 'content-type': blob.blob.contentType || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, signal: AbortSignal.timeout(240_000) });
+  const upload = await fetch(uploadUrl, { method: 'PUT', body: blob.stream, duplex: 'half', headers: { 'content-type': blob.blob.contentType || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, signal: AbortSignal.timeout(240_000) } as RequestInit & { duplex: 'half' });
   if (!upload.ok) throw new Error(`Uploading the original to Sarvam failed (${upload.status}).`);
   const started = await fetch(`${SARVAM}/jobs/${encodeURIComponent(jobId)}/start`, { method: 'POST', headers: { 'api-subscription-key': key } });
   const startedBody = await started.json().catch(() => ({}));
@@ -167,7 +167,7 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
   try {
     response = await fetch(`${appUrl}/api/analyze`, {
       method: 'POST', headers,
-      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, generatedBySarvam: true, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
+      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, generatedBySarvam: true, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, speakerCount: input.speakerCount, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
       signal: AbortSignal.timeout(285_000),
     });
   } catch (error) {

@@ -35,6 +35,7 @@ function targetLanguageReviewNote(language: string) {
 
 type Segment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type Transcript = { transcript: string; segments: Segment[]; detectedLanguage: string; engine: string };
+type AudioTranscriptChunk = { sourceTranscript: string; dubTranscript: string };
 type AudioFinding = { severity: 'critical' | 'review' | 'info'; title: string; detail: string; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; sourceStartSegment?: number; sourceEndSegment?: number; dubStartSegment?: number; dubEndSegment?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only'; sourceQuote?: string; dubQuote?: string };
 type QaCheckpoint = {
   kind?: 'qa-checkpoint';
@@ -43,6 +44,9 @@ type QaCheckpoint = {
   originalTranscriptionJobId?: string;
   dubbedTranscriptionJobId?: string;
   audioReviewChunks?: Record<string, AudioFinding[]>;
+  audioTranscriptChunks?: Record<string, AudioTranscriptChunk>;
+  dubbedScriptResult?: Transcript;
+  dubbedAudioResult?: Transcript;
   audioReviewChunkCount?: number;
   audioReviewModels?: string[];
   backTranslation?: string;
@@ -77,6 +81,15 @@ const audioFindingsSchema = {
     dubStartSegment: { type: ['integer', 'null'] }, dubEndSegment: { type: ['integer', 'null'] },
   }, required: ['severity', 'category', 'title', 'detail', 'sourceQuote', 'dubQuote', 'sourceStart', 'sourceEnd', 'dubStart', 'dubEnd', 'sourceStartSegment', 'sourceEndSegment', 'dubStartSegment', 'dubEndSegment'] } } },
   required: ['findings'],
+};
+const audioReviewSchema = {
+  type: 'object',
+  properties: {
+    sourceTranscript: { type: 'string' },
+    dubTranscript: { type: 'string' },
+    findings: audioFindingsSchema.properties.findings,
+  },
+  required: ['sourceTranscript', 'dubTranscript', 'findings'],
 };
 
 function sarvamSegments(data: Json): Segment[] {
@@ -427,6 +440,16 @@ function locatePhrase(segments: Segment[], phrase: string) {
 function formatSegments(segments: Segment[]) {
   return segments.map((segment, index) => `[${index}] ${segment.start.toFixed(1)}-${segment.end.toFixed(1)}s: ${segment.text}`).join('\n').slice(0, 14000);
 }
+function transcriptFromAudioChunks(chunks: Record<string, AudioTranscriptChunk>, side: 'sourceTranscript' | 'dubTranscript', duration: number, language: string): Transcript {
+  const segments = Object.entries(chunks)
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([key, chunk]) => {
+      const start = Number(key) * 30;
+      return { start, end: Math.min(duration, start + 30), text: String(chunk[side] || '').trim() };
+    })
+    .filter(segment => segment.text && segment.end > segment.start);
+  return { transcript: segments.map(segment => segment.text).join(' '), segments, detectedLanguage: language, engine: 'Gemini audio transcription' };
+}
 function formatSegmentsRange(segments: Segment[], start: number, end: number) {
   return segments.map((segment, index) => ({ segment, index }))
     .filter(({ segment }) => segment.end >= start && segment.start <= end)
@@ -447,12 +470,13 @@ function segmentRange(segments: Segment[], startIndex: unknown, endIndex: unknow
   const boundedEnd = Math.max(first, last ?? first);
   return { start: segments[first].start, end: segments[boundedEnd].end };
 }
-async function geminiTranscriptReview(source: Transcript, dub: Transcript, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>): Promise<AudioFinding[]> {
+async function geminiTranscriptReview(source: Transcript, dub: Transcript, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, dubScript?: Transcript): Promise<AudioFinding[]> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for transcript review.');
   const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
   const sourceText = formatSegments(source.segments) || source.transcript.slice(0, 14000);
   const dubText = formatSegments(dub.segments) || dub.transcript.slice(0, 14000);
+  const dubScriptText = dubScript ? (formatSegments(dubScript.segments) || dubScript.transcript.slice(0, 14000)) : '';
   const prompt = `Compare the COMPLETE source and dub transcripts for this dubbing QA. Source language: ${sourceLanguage}. Dub language: ${targetLanguage}. Read both full transcripts in order and compare each idea with the corresponding idea wherever it appears. The dub may speak a translated sentence earlier or later than the source, so do not compare only equal timestamps and do not call content missing or added until you have checked the ENTIRE other transcript. Check every number and unit in context, changed food names, omissions/additions, negation, instructions, and below/above-limit claims. Flag clear English words or phrases left in the dub instead of the selected target language as Language mixing; ignore names, brands, and common loanwords normally used in that language. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Natural rewording is correct. Return EVERY distinct real issue, including repeated issues at different places. Each finding must quote the exact source wording and exact dub wording and include the closest zero-based segment indexes from the supplied lists. If you cannot find a concrete source/dub difference in the full transcripts, do not report it. Do not infer pronunciation or accent from text. Return JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation: what the source says and what the dub says","sourceQuote":"exact short source phrase","dubQuote":"exact short dub phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. Return an empty findings list if no concrete mismatch appears.
 
 SOURCE (${sourceLanguage}) — complete ordered transcript segments:
@@ -460,7 +484,10 @@ ${sourceText}
 
 DUB (${targetLanguage}) — complete ordered transcript segments:
 ${dubText}`;
-  const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 8192 } }, key, 150_000);
+  const promptWithScript = dubScriptText
+    ? `${prompt}\n\nSARVAM DUB SRT (${targetLanguage}) - supporting script reference only; the finished dubbed audio is authoritative:\n${dubScriptText}`
+    : prompt;
+  const response = await geminiRequest({ model, input: promptWithScript, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 8192 } }, key, 150_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
   const payload = await response.json().catch(() => ({}));
@@ -499,7 +526,7 @@ ${dubText}`;
   }
   return [...findingsByKey.values()];
 }
-async function geminiAudioReview(source: Transcript, dub: Transcript, sourceAudio: { data: string; mime_type: string }, dubAudio: { data: string; mime_type: string }, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, clipStart: number, clipEnd: number): Promise<AudioFinding[]> {
+async function geminiAudioReview(source: Transcript, dub: Transcript, sourceAudio: { data: string; mime_type: string }, dubAudio: { data: string; mime_type: string }, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, clipStart: number, clipEnd: number): Promise<{ findings: AudioFinding[]; sourceTranscript: string; dubTranscript: string }> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for audio review.');
   const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
@@ -508,14 +535,14 @@ async function geminiAudioReview(source: Transcript, dub: Transcript, sourceAudi
   const body = {
     model,
     input: [
-      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The dub transcript may be Sarvam's generated subtitle/script and may not exactly match the rendered dub audio. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching subtitle as proof that the dub audio is correct. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied scripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give the exact start and end time in BOTH tracks where possible (seconds from each track's start), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Return the zero-based start/end segment indexes for the closest transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment). Use transcript segments as timing anchors. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}` },
+      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The dub transcript may be Sarvam's generated subtitle/script and may not exactly match the rendered dub audio. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching subtitle as proof that the dub audio is correct. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied scripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"sourceTranscript":"full spoken words in this source audio chunk, or empty if silent","dubTranscript":"full spoken words in this dub audio chunk, or empty if silent","findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return the same object with an empty findings array and both transcripts.\n\nSOURCE TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}` },
       { type: 'audio', data: sourceClip.data, mime_type: sourceClip.mime_type },
       { type: 'audio', data: dubClip.data, mime_type: dubClip.mime_type },
     ],
   };
   const requestBytes = Buffer.byteLength(JSON.stringify(body));
   if (requestBytes > 18 * 1024 * 1024) throw new Error('The two audio tracks are too long for one AI listening review. Use shorter clips (about 20 minutes or less) and analyze the video in parts.');
-  const response = await geminiRequest({ ...body, response_format: { type: 'text', mime_type: 'application/json', schema: audioFindingsSchema }, generation_config: { max_output_tokens: 4096 } }, key, 165_000);
+  const response = await geminiRequest({ ...body, response_format: { type: 'text', mime_type: 'application/json', schema: audioReviewSchema }, generation_config: { max_output_tokens: 6144 } }, key, 165_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
   const payload = await response.json().catch(() => ({}));
@@ -527,13 +554,13 @@ async function geminiAudioReview(source: Transcript, dub: Transcript, sourceAudi
   } catch {
     throw new Error('Gemini audio review returned incomplete or invalid JSON.');
   }
-  if (!Array.isArray(parsed.findings)) throw new Error('Gemini audio review returned invalid findings.');
-  return parsed.findings.filter((item: Json) => item?.title && item?.detail && ['critical', 'review', 'info'].includes(item.severity)).map((item: Json): AudioFinding => {
+  if (!Array.isArray(parsed.findings) || typeof parsed.sourceTranscript !== 'string' || typeof parsed.dubTranscript !== 'string') throw new Error('Gemini audio review returned invalid transcripts or findings.');
+  const findings = parsed.findings.filter((item: Json) => item?.title && item?.detail && ['critical', 'review', 'info'].includes(item.severity)).map((item: Json): AudioFinding => {
     const sourceRange = Number.isInteger(item.sourceStartSegment)
-      ? segmentRange(source.segments, item.sourceStartSegment, item.sourceEndSegment, undefined, undefined)
+      ? segmentRange(source.segments, item.sourceStartSegment, item.sourceEndSegment, item.sourceStart != null ? clipStart + Number(item.sourceStart) : undefined, item.sourceEnd != null ? clipStart + Number(item.sourceEnd) : undefined)
       : { start: item.sourceStart != null && Number.isFinite(Number(item.sourceStart)) ? clipStart + Number(item.sourceStart) : undefined, end: item.sourceEnd != null && Number.isFinite(Number(item.sourceEnd)) ? clipStart + Number(item.sourceEnd) : undefined };
     const dubRange = Number.isInteger(item.dubStartSegment)
-      ? segmentRange(dub.segments, item.dubStartSegment, item.dubEndSegment, undefined, undefined)
+      ? segmentRange(dub.segments, item.dubStartSegment, item.dubEndSegment, item.dubStart != null ? clipStart + Number(item.dubStart) : undefined, item.dubEnd != null ? clipStart + Number(item.dubEnd) : undefined)
       : { start: item.dubStart != null && Number.isFinite(Number(item.dubStart)) ? clipStart + Number(item.dubStart) : undefined, end: item.dubEnd != null && Number.isFinite(Number(item.dubEnd)) ? clipStart + Number(item.dubEnd) : undefined };
     return {
       severity: item.severity, title: String(item.title).slice(0, 140), detail: String(item.detail).slice(0, 1000),
@@ -541,10 +568,10 @@ async function geminiAudioReview(source: Transcript, dub: Transcript, sourceAudi
       dubStart: dubRange.start, dubEnd: dubRange.end, evidenceStatus: 'audio-only',
     };
   });
+  return { findings, sourceTranscript: parsed.sourceTranscript.trim(), dubTranscript: parsed.dubTranscript.trim() };
 }
 export async function POST(request: Request) {
-  const key = process.env.SARVAM_API_KEY?.trim();
-  if (!key) return NextResponse.json({ error: 'Add SARVAM_API_KEY to .env.local and restart the dev server.' }, { status: 503 });
+  const key = process.env.SARVAM_API_KEY?.trim() || '';
   if (!process.env.GEMINI_API_KEY?.trim()) return NextResponse.json({ error: 'Add GEMINI_API_KEY to .env.local. The AI audio reviewer needs it to listen to and compare both languages.' }, { status: 503 });
   let stage = 'Reading uploaded files';
   let stageStartedAt = Date.now();
@@ -584,6 +611,8 @@ export async function POST(request: Request) {
     const isJson = request.headers.get('content-type')?.includes('application/json');
     const form = isJson ? null : await request.formData();
     const json: Json = isJson ? await request.json() : {};
+    const generatedBySarvam = json.generatedBySarvam === true;
+    if (!key && !generatedBySarvam) return NextResponse.json({ error: 'Add SARVAM_API_KEY to .env.local and restart the dev server.' }, { status: 503 });
     historyJobId = String(json.historyJobId || '');
     if (historyJobId) {
       const internalToken = request.headers.get('x-workflow-internal');
@@ -669,11 +698,15 @@ export async function POST(request: Request) {
 
     const dubbedSubtitleSrt = typeof json.dubbedSubtitleSrt === 'string' && json.dubbedSubtitleSrt.length <= 2_000_000 ? json.dubbedSubtitleSrt : '';
     let originalResult = checkpoint.originalResult;
-    let dubbedResult = checkpoint.dubbedResult || (dubbedSubtitleSrt && parseSarvamSrt(dubbedSubtitleSrt, target.sarvam)) || undefined;
-    if (!dubbedResult) {
-      throw new Error('The dubbed SRT transcript is unavailable or could not be parsed. QA stopped before any Sarvam transcription jobs were created, so no additional STT credits should be charged.');
+    const parsedDubScript = checkpoint.dubbedScriptResult || (dubbedSubtitleSrt && parseSarvamSrt(dubbedSubtitleSrt, target.sarvam)) || undefined;
+    let dubbedScriptResult = parsedDubScript;
+    let dubbedResult = generatedBySarvam
+      ? checkpoint.dubbedAudioResult || checkpoint.dubbedResult || dubbedScriptResult
+      : checkpoint.dubbedResult || dubbedScriptResult;
+    if (generatedBySarvam && !dubbedScriptResult) {
+      throw new Error('The Sarvam dubbed-language SRT is unavailable or could not be parsed. QA stopped before any additional provider review calls.');
     }
-    if (!originalResult || !dubbedResult) {
+    if (!generatedBySarvam && (!originalResult || !dubbedResult)) {
       markStage(dubbedResult ? 'Transcribing source with Sarvam' : 'Transcribing source and dubbed media with Sarvam');
       updateAnalysisProgress(progressId, stage, 24);
       const transcriptionJobCallbacks = (track: 'original' | 'dubbed') => ({
@@ -683,18 +716,11 @@ export async function POST(request: Request) {
           await persistCheckpoint();
         },
         onJobFailed: async () => {
-          // Keep the terminal transcription job ID in the checkpoint. QA retries
-          // will poll this failed job once and return its exact provider error,
-          // rather than silently creating and billing for a new transcription.
           await persistCheckpoint();
         },
       });
       const originalCallbacks = transcriptionJobCallbacks('original');
       const dubbedCallbacks = transcriptionJobCallbacks('dubbed');
-      if (dubbedResult && !checkpoint.dubbedResult) {
-        checkpoint.dubbedResult = dubbedResult;
-        await persistCheckpoint();
-      }
       const [newOriginalResult, newDubResult] = await Promise.all([
         originalResult ? Promise.resolve(originalResult) : transcribeWithSarvam(original, source.sarvam, key, checkpoint.originalTranscriptionJobId, originalCallbacks.onJobStarted, originalCallbacks.onJobFailed).then(async result => { originalResult = result; checkpoint.originalResult = result; delete checkpoint.originalTranscriptionJobId; await persistCheckpoint(); return result; }),
         dubbedResult ? Promise.resolve(dubbedResult) : transcribeWithSarvam(dubbed, target.sarvam, key, checkpoint.dubbedTranscriptionJobId, dubbedCallbacks.onJobStarted, dubbedCallbacks.onJobFailed).then(async result => { dubbedResult = result; checkpoint.dubbedResult = result; delete checkpoint.dubbedTranscriptionJobId; await persistCheckpoint(); return result; }),
@@ -702,11 +728,21 @@ export async function POST(request: Request) {
       originalResult = newOriginalResult;
       dubbedResult = newDubResult;
     }
-    if (!originalResult || !dubbedResult) throw new Error('Sarvam did not return both source and dubbed transcripts.');
+    if (!generatedBySarvam && (!originalResult || !dubbedResult)) throw new Error('Sarvam did not return both source and dubbed transcripts.');
+    if (!generatedBySarvam) dubbedScriptResult ||= dubbedResult;
+    if (generatedBySarvam && !checkpoint.audioTranscriptChunks) {
+      checkpoint.textReviewComplete = false;
+      checkpoint.textReviewAttempted = false;
+    }
+    if (generatedBySarvam && dubbedScriptResult) checkpoint.dubbedScriptResult = dubbedScriptResult;
     markStage('Preparing transcript and audio evidence');
     updateAnalysisProgress(progressId, stage, 66);
     const [backTranslation, [sourceAudio, dubAudio]] = await Promise.all([
-      checkpoint.backTranslation !== undefined ? Promise.resolve(checkpoint.backTranslation) : backTranslate(dubbedResult.transcript, source.sarvam, target.sarvam, key),
+      generatedBySarvam
+        ? Promise.resolve('')
+        : checkpoint.backTranslation !== undefined
+          ? Promise.resolve(checkpoint.backTranslation)
+          : backTranslate(dubbedResult!.transcript, source.sarvam, target.sarvam, key),
       checkpoint.sourceAudio && checkpoint.dubAudio ? Promise.resolve([checkpoint.sourceAudio, checkpoint.dubAudio] as const) : Promise.all([extractCompactAudio(original), extractCompactAudio(dubbed)]),
     ]);
     checkpoint.backTranslation = backTranslation;
@@ -721,55 +757,63 @@ export async function POST(request: Request) {
     let transcriptCrossCheckAvailable = checkpoint.textReviewComplete === true;
     let transcriptCrossCheckError: string | null = checkpoint.transcriptCrossCheckError || null;
     const reviewCoverageWarnings: string[] = [];
-    if (formatSegments(originalResult.segments).length > 14000 || formatSegments(dubbedResult.segments).length > 14000) reviewCoverageWarnings.push('Timestamped segment context for audio review was truncated.');
-    if (!originalResult.segments.length) reviewCoverageWarnings.push('The source transcript has no timing data, so source-side issue locations may be unavailable.');
-    if (!dubbedResult.segments.length) reviewCoverageWarnings.push('The dub transcript has no timing data, so dub-side issue locations and transcript playback are unavailable.');
-    const transcriptReview = checkpoint.textReviewComplete ? Promise.resolve() : (async () => {
+    const emptySourceTranscript: Transcript = { transcript: '', segments: [], detectedLanguage: source.sarvam, engine: 'Gemini audio transcription pending' };
+    const sourceForAudio = originalResult || emptySourceTranscript;
+    const dubScriptForAudio = dubbedScriptResult || dubbedResult!;
+    const runTranscriptReview = async (sourceTranscript: Transcript, dubTranscript: Transcript, scriptReference?: Transcript) => {
+      if (checkpoint.textReviewComplete) {
+        textFindings = checkpoint.textFindings || [];
+        transcriptCrossCheckAvailable = true;
+        transcriptCrossCheckError = null;
+        return;
+      }
       checkpoint.textReviewAttempted = true;
       checkpoint.transcriptCrossCheckError = null;
       await persistCheckpoint();
-      return geminiTranscriptReview(originalResult, dubbedResult, sourceLanguage, targetLanguage, transcriptModelsUsed);
-    })()
-      .then(async findings => {
-        textFindings = findings;
-        checkpoint.textFindings = findings;
+      try {
+        textFindings = await geminiTranscriptReview(sourceTranscript, dubTranscript, sourceLanguage, targetLanguage, transcriptModelsUsed, scriptReference);
+        checkpoint.textFindings = textFindings;
         checkpoint.textReviewComplete = true;
         checkpoint.transcriptCrossCheckError = null;
         transcriptCrossCheckAvailable = true;
-        await persistCheckpoint();
-      })
-      .catch(async error => {
+        transcriptCrossCheckError = null;
+      } catch (error) {
         transcriptCrossCheckAvailable = false;
         transcriptCrossCheckError = error instanceof Error ? error.message.slice(0, 500) : 'Unknown Gemini error';
         console.warn(`[api/analyze] Transcript cross-check unavailable: ${transcriptCrossCheckError}`);
         checkpoint.transcriptCrossCheckError = transcriptCrossCheckError;
-        await persistCheckpoint();
-      });
-    if (checkpoint.audioReviewComplete && !checkpoint.audioReviewModels?.length) {
-      checkpoint.audioReviewComplete = false;
-      checkpoint.audioReviewChunks = {};
-      checkpoint.audioReviewChunkCount = undefined;
-    }
-    const audioReview = checkpoint.audioReviewComplete ? Promise.resolve(checkpoint.audioFindings || []) : (async () => {
+      }
+      await persistCheckpoint();
+    };
+    const runAudioReview = async (sourceTranscript: Transcript, dubTranscript: Transcript) => {
       const chunkSeconds = 30;
       const duration = Math.max(
-        originalResult.segments[originalResult.segments.length - 1]?.end || 0,
-        dubbedResult.segments[dubbedResult.segments.length - 1]?.end || 0,
+        sourceTranscript.segments[sourceTranscript.segments.length - 1]?.end || 0,
+        dubTranscript.segments[dubTranscript.segments.length - 1]?.end || 0,
       );
-      if (!duration) throw new Error('Sarvam transcripts did not include timing data, so audio QA cannot be split into resumable checkpoints.');
+      if (!duration) throw new Error('Transcript or subtitle timing data is missing, so audio QA cannot be split into resumable checkpoints.');
       const chunkCount = Math.ceil(duration / chunkSeconds);
+      const cachedTranscriptCount = Object.keys(checkpoint.audioTranscriptChunks || {}).length;
+      if (checkpoint.audioReviewComplete && (!checkpoint.audioReviewModels?.length || (generatedBySarvam && cachedTranscriptCount < chunkCount))) {
+        checkpoint.audioReviewComplete = false;
+      }
       checkpoint.audioReviewChunks ||= {};
+      checkpoint.audioTranscriptChunks ||= {};
       checkpoint.audioReviewChunkCount = chunkCount;
       await persistCheckpoint();
+      if (checkpoint.audioReviewComplete) return checkpoint.audioFindings || [];
       for (let index = 0; index < chunkCount; index += 1) {
         const chunkKey = String(index);
-        if (Object.prototype.hasOwnProperty.call(checkpoint.audioReviewChunks, chunkKey)) continue;
+        const hasFindings = Object.prototype.hasOwnProperty.call(checkpoint.audioReviewChunks, chunkKey);
+        const hasTranscripts = Object.prototype.hasOwnProperty.call(checkpoint.audioTranscriptChunks, chunkKey);
+        if (hasFindings && (!generatedBySarvam || hasTranscripts)) continue;
         const start = index * chunkSeconds;
         const end = Math.min(duration, start + chunkSeconds);
         markStage(`Gemini listening review ${index + 1}/${chunkCount}`);
         updateAnalysisProgress(progressId, stage, Math.min(95, 82 + Math.floor((index / chunkCount) * 12)));
-        const findings = await geminiAudioReview(originalResult, dubbedResult, sourceAudio, dubAudio, sourceLanguage, targetLanguage, audioModelsUsed, start, end);
-        checkpoint.audioReviewChunks[chunkKey] = findings;
+        const result = await geminiAudioReview(sourceTranscript, dubTranscript, sourceAudio, dubAudio, sourceLanguage, targetLanguage, audioModelsUsed, start, end);
+        checkpoint.audioReviewChunks[chunkKey] = result.findings;
+        checkpoint.audioTranscriptChunks[chunkKey] = { sourceTranscript: result.sourceTranscript, dubTranscript: result.dubTranscript };
         checkpoint.audioReviewModels = [...audioModelsUsed];
         checkpoint.audioFindings = Object.values(checkpoint.audioReviewChunks).flat();
         await persistCheckpoint();
@@ -778,9 +822,37 @@ export async function POST(request: Request) {
       checkpoint.audioFindings = Object.values(checkpoint.audioReviewChunks).flat();
       await persistCheckpoint();
       return checkpoint.audioFindings;
-    })();
-    const [, aiFindings] = await Promise.all([transcriptReview, audioReview]);
-    if (!audioModelsUsed.size) throw new Error('Gemini did not confirm any audio-review model response; the QA report cannot be marked complete.');
+    };
+    let aiFindings: AudioFinding[];
+    if (generatedBySarvam) {
+      aiFindings = await runAudioReview(sourceForAudio, dubScriptForAudio);
+      const duration = checkpoint.audioReviewChunkCount ? Math.min(checkpoint.audioReviewChunkCount * 30, dubScriptForAudio.segments[dubScriptForAudio.segments.length - 1]?.end || checkpoint.audioReviewChunkCount * 30) : 0;
+      const audioTranscripts = checkpoint.audioTranscriptChunks || {};
+      originalResult = transcriptFromAudioChunks(audioTranscripts, 'sourceTranscript', duration, sourceLanguage);
+      dubbedResult = transcriptFromAudioChunks(audioTranscripts, 'dubTranscript', duration, targetLanguage);
+      if (!originalResult.transcript) reviewCoverageWarnings.push('Gemini did not return a source transcript from the audio.');
+      if (!dubbedResult.transcript) reviewCoverageWarnings.push('Gemini did not return a spoken-dub transcript from the audio.');
+      if (Object.keys(audioTranscripts).length < (checkpoint.audioReviewChunkCount || 0)) reviewCoverageWarnings.push('Gemini audio transcription did not cover every audio segment.');
+      checkpoint.originalResult = originalResult;
+      checkpoint.dubbedAudioResult = dubbedResult;
+      await persistCheckpoint();
+      if (originalResult.transcript && dubbedResult.transcript) await runTranscriptReview(originalResult, dubbedResult, dubbedScriptResult);
+      else {
+        transcriptCrossCheckAvailable = false;
+        transcriptCrossCheckError = 'Gemini could not produce both spoken transcripts from the audio.';
+      }
+    } else {
+      if (!originalResult || !dubbedResult) throw new Error('Both source and dubbed transcripts are required for QA.');
+      const [, findings] = await Promise.all([
+        runTranscriptReview(originalResult, dubbedResult),
+        runAudioReview(originalResult, dubbedResult),
+      ]);
+      aiFindings = findings;
+    }
+    if (originalResult && (formatSegments(originalResult.segments).length > 14000 || formatSegments(dubbedResult!.segments).length > 14000)) reviewCoverageWarnings.push('Timestamped segment context for audio review was truncated.');
+    if (!originalResult?.segments.length) reviewCoverageWarnings.push('The source transcript has no timing data, so source-side issue locations may be unavailable.');
+    if (!dubbedResult?.segments.length) reviewCoverageWarnings.push('The dub transcript has no timing data, so dub-side issue locations and transcript playback are unavailable.');
+    if (checkpoint.audioReviewComplete && !checkpoint.audioReviewModels?.length) throw new Error('Gemini did not confirm any audio-review model response; the QA report cannot be marked complete.');
     const audioFindings = aiFindings.map(item => ({
       ...item,
       evidenceStatus: textFindings.some(check => phrasesSupportSameFinding(item, check)) ? 'cross-checked' as const : 'audio-only' as const,
@@ -800,6 +872,7 @@ export async function POST(request: Request) {
       project: historyProjectName || original.name.replace(/\.[^.]+$/, ''),
       sourceLanguage, targetLanguage, createdAt: new Date().toISOString(),
       originalTranscript: originalResult.transcript, dubbedTranscript: dubbedResult.transcript,
+      dubSubtitleTranscript: generatedBySarvam ? dubbedScriptResult?.transcript || '' : '',
       backTranslation, findings: combinedFindings,
       transcriptCrossCheckAvailable,
       transcriptCrossCheckError,

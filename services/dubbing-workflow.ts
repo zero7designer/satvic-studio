@@ -167,14 +167,14 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
   try {
     response = await fetch(`${appUrl}/api/analyze`, {
       method: 'POST', headers,
-      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
+      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, generatedBySarvam: true, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
       signal: AbortSignal.timeout(285_000),
     });
   } catch (error) {
     const detail = errorText(error);
     const timedOut = /timeout|timed out|abort/i.test(detail);
     return { jobError: timedOut
-      ? 'QA did not finish within Vercel’s request window. Your saved dub is safe. Retry resumes saved transcription and QA checkpoints; it will not create another dub.'
+      ? 'QA did not finish within Vercel’s request window. Your saved dub is safe. Retry resumes saved Gemini QA checkpoints; it will not create another dub.'
       : `Could not reach the QA API at ${appUrl}/api/analyze: ${detail}`, dubbedBlobUrl };
   }
   const { body, text } = await readResponse(response);
@@ -200,20 +200,17 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
 }
 
 async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null) {
-  // Each API request is a durable workflow step. If Sarvam STT is still running,
-  // the API has checkpointed its job ID; retrying this request polls that same
-  // provider job instead of uploading the audio and creating a billable job again.
+  // QA retries resume saved Gemini review checkpoints and never start another dub.
   const maxResumeAttempts = 40;
   for (let attempt = 1; attempt <= maxResumeAttempts; attempt += 1) {
     const result = await runQaAttempt(input, dubbedBlobUrl, dubbedSubtitleSrt);
     if (!('jobError' in result) || typeof result.jobError !== 'string') return result;
-    const canResumeSarvam = /Sarvam transcription is still processing/i.test(result.jobError);
     const canResumeCheckpoint = /QA did not finish within Vercel|QA reached Vercel|QA checkpoint retry:/i.test(result.jobError);
-    if ((!canResumeSarvam && !canResumeCheckpoint) || attempt === maxResumeAttempts) return result;
+    if (!canResumeCheckpoint || attempt === maxResumeAttempts) return result;
     console.info(`[dubbing-workflow] job=${input.dbJobId} resuming saved QA checkpoint check=${attempt + 1}/${maxResumeAttempts}`);
-    await sleep(canResumeSarvam ? '10s' : '20s');
+    await sleep('20s');
   }
-  return { jobError: 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume the saved transcription.' , dubbedBlobUrl };
+  return { jobError: 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Gemini review checkpoints.' , dubbedBlobUrl };
 }
 
 export async function generateAndReview(input: JobInput) {

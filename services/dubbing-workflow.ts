@@ -82,7 +82,7 @@ async function startSarvam(input: JobInput) {
   if (!blob) throw new Error('The uploaded source video could not be found in Blob storage.');
   const createdResponse = await fetch(`${SARVAM}/jobs`, {
     method: 'POST', headers: { 'api-subscription-key': key, 'content-type': 'application/json' },
-    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, num_speakers: 2, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
+    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
   });
   const created = await createdResponse.json().catch(() => ({}));
   if (!createdResponse.ok) throw new Error(`Sarvam could not create the dubbing job (${createdResponse.status}): ${created.message || created.detail || 'Unknown error'}`);

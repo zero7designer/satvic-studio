@@ -36,7 +36,7 @@ function targetLanguageReviewNote(language: string) {
 type Segment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type Transcript = { transcript: string; segments: Segment[]; detectedLanguage: string; engine: string };
 type CompactAudio = { data: string; mime_type: string; durationSeconds?: number };
-type AudioFinding = { severity: 'critical' | 'review' | 'info'; title: string; detail: string; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; sourceStartSegment?: number; sourceEndSegment?: number; dubStartSegment?: number; dubEndSegment?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only'; sourceQuote?: string; dubQuote?: string };
+type AudioFinding = { severity: 'critical' | 'review' | 'info'; title: string; detail: string; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; sourceStartSegment?: number; sourceEndSegment?: number; dubStartSegment?: number; dubEndSegment?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only' | 'visual-only'; sourceQuote?: string; dubQuote?: string };
 type TranscriptReviewChunk = { id: string; sourceText: string; dubText: string };
 type QaCheckpoint = {
   kind?: 'qa-checkpoint';
@@ -45,6 +45,9 @@ type QaCheckpoint = {
   originalTranscriptionJobId?: string;
   dubbedTranscriptionJobId?: string;
   audioReviewChunks?: Record<string, AudioFinding[]>;
+  videoReviewFindings?: AudioFinding[];
+  videoReviewComplete?: boolean;
+  videoReviewVersion?: number;
   dubbedScriptResult?: Transcript;
   dubbedAudioResult?: Transcript;
   audioReviewChunkCount?: number;
@@ -232,6 +235,83 @@ async function extractCompactAudio(file: File): Promise<CompactAudio> {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+function isVideoMedia(file: File) {
+  const extension = path.extname(file.name).toLowerCase();
+  return file.type.startsWith('video/') || ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.m4v'].includes(extension);
+}
+
+async function scanDubVideo(file: File): Promise<AudioFinding[]> {
+  if (!isVideoMedia(file)) return [];
+  if (!ffmpegPath) throw new Error('The bundled FFmpeg executable is unavailable for the video check.');
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'satvic-video-check-'));
+  const extension = path.extname(file.name).toLowerCase() || '.mp4';
+  const inputPath = path.join(directory, `dub${extension}`);
+  const findings: AudioFinding[] = [];
+  let freezeStart: number | undefined;
+  let blackStart: number | undefined;
+  let pending = '';
+  try {
+    await writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(ffmpegPath!, [
+        '-hide_banner', '-nostdin', '-i', inputPath,
+        '-vf', 'fps=2,freezedetect=n=-60dB:d=5,blackdetect=d=1.5:pix_th=0.10',
+        '-an', '-f', 'null', '-',
+      ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      let diagnostic = '';
+      const parseLine = (line: string) => {
+        diagnostic = `${diagnostic}${line}\n`.slice(-2500);
+        const freezeMatch = line.match(/freeze_start:\s*(-?\d+(?:\.\d+)?)/);
+        if (freezeMatch) freezeStart = Number(freezeMatch[1]);
+        const freezeDuration = line.match(/freeze_duration:\s*(\d+(?:\.\d+)?)/);
+        if (freezeDuration && freezeStart !== undefined) {
+          const duration = Number(freezeDuration[1]);
+          if (duration >= 5) findings.push({
+            severity: 'review', title: 'Possible frozen section in dubbed video', category: 'Video freeze',
+            detail: `Dubbed video frames changed very little for ${duration.toFixed(1)} seconds (${formatClock(freezeStart)}–${formatClock(freezeStart + duration)}). This may be a freeze or an intentionally still shot; check this section.`,
+            dubStart: freezeStart, dubEnd: freezeStart + duration, evidenceStatus: 'visual-only',
+          });
+          freezeStart = undefined;
+        }
+        const blackMatch = line.match(/black_start:\s*(-?\d+(?:\.\d+)?)/);
+        if (blackMatch) blackStart = Number(blackMatch[1]);
+        const blackEnd = line.match(/black_end:\s*(-?\d+(?:\.\d+)?)/);
+        const blackDuration = line.match(/black_duration:\s*(\d+(?:\.\d+)?)/);
+        if (blackEnd && blackDuration && blackStart !== undefined) {
+          const end = Number(blackEnd[1]);
+          const duration = Number(blackDuration[1]);
+          if (duration >= 1.5) findings.push({
+            severity: 'review', title: 'Possible black screen in dubbed video', category: 'Black screen',
+            detail: `Dubbed video appears black for ${duration.toFixed(1)} seconds (${formatClock(blackStart)}–${formatClock(end)}). Check whether this is intentional.`,
+            dubStart: blackStart, dubEnd: end, evidenceStatus: 'visual-only',
+          });
+          blackStart = undefined;
+        }
+      };
+      child.stderr?.on('data', chunk => {
+        pending += String(chunk);
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() || '';
+        lines.forEach(parseLine);
+      });
+      child.once('error', reject);
+      child.once('close', code => {
+        if (pending) parseLine(pending);
+        code === 0 ? resolve() : reject(new Error(`Could not scan the dubbed video. ${diagnostic.trim().split('\n').slice(-2).join(' ')}`));
+      });
+    });
+    return findings.slice(0, 50);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+function formatClock(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 }
 
 async function sliceCompactAudio(audio: CompactAudio, startSeconds: number, durationSeconds: number) {
@@ -740,6 +820,11 @@ export async function POST(request: Request) {
       checkpoint.audioReviewChunkCount = undefined;
       checkpoint.audioReviewPromptVersion = 2;
     }
+    if (checkpoint.videoReviewVersion !== 1) {
+      checkpoint.videoReviewComplete = false;
+      checkpoint.videoReviewFindings = [];
+      checkpoint.videoReviewVersion = 1;
+    }
     if (!originalResult || !dubbedResult) {
       markStage(generatedBySarvam ? 'Transcribing original and dubbed media with Saaras' : dubbedResult ? 'Transcribing source with Sarvam' : 'Transcribing source and dubbed media with Sarvam');
       updateAnalysisProgress(progressId, stage, 24);
@@ -783,6 +868,20 @@ export async function POST(request: Request) {
     let transcriptCrossCheckAvailable = checkpoint.textReviewComplete === true;
     let transcriptCrossCheckError: string | null = checkpoint.transcriptCrossCheckError || null;
     const reviewCoverageWarnings: string[] = [];
+    const runVideoReview = async () => {
+      if (checkpoint.videoReviewComplete) return checkpoint.videoReviewFindings || [];
+      try {
+        checkpoint.videoReviewFindings = await scanDubVideo(dubbed as File);
+        checkpoint.videoReviewComplete = true;
+      } catch (error) {
+        checkpoint.videoReviewComplete = false;
+        const message = error instanceof Error ? error.message.slice(0, 300) : 'Unknown video scan error';
+        reviewCoverageWarnings.push(`The dubbed-video freeze and black-screen scan did not finish: ${message}`);
+        console.warn(`[api/analyze] Video scan unavailable: ${message}`);
+      }
+      await persistCheckpoint();
+      return checkpoint.videoReviewFindings || [];
+    };
     const runTranscriptReview = async (sourceTranscript: Transcript, dubTranscript: Transcript) => {
       const chunks = buildTranscriptReviewChunks(sourceTranscript, dubTranscript);
       checkpoint.textReviewChunks ||= {};
@@ -868,6 +967,7 @@ export async function POST(request: Request) {
     const [, findings] = await Promise.all([
       runTranscriptReview(originalResult, dubbedResult),
       runAudioReview(originalResult, dubbedResult),
+      runVideoReview(),
     ]);
     aiFindings = findings;
     if (!originalResult?.segments.length) reviewCoverageWarnings.push('The source transcript has no timing data, so source-side issue locations may be unavailable.');
@@ -881,9 +981,11 @@ export async function POST(request: Request) {
     const unmatchedTextFindings = textFindings
       .filter(check => !aiFindings.some(item => phrasesSupportSameFinding(item, check)))
       .map(item => ({ ...item, source: 'Gemini transcript cross-check' }));
+    const videoFindings = (checkpoint.videoReviewFindings || []).map(item => ({ ...item, source: 'Local dubbed-video frame scan' }));
     const combinedFindings = [
       ...audioFindings,
       ...unmatchedTextFindings,
+      ...videoFindings,
     ];
     const transcriptReviewer = [...transcriptModelsUsed].join(', ');
     if (!textFindings.length && transcriptCrossCheckAvailable && (!transcriptReviewer || /lite/i.test(transcriptReviewer))) {
@@ -907,9 +1009,12 @@ export async function POST(request: Request) {
       audioReviewEngine: [...audioModelsUsed].join(', '),
       audioReviewFindingCount: aiFindings.length,
       audioReviewChunkCount: checkpoint.audioReviewChunkCount || 0,
+      videoReviewCompleted: checkpoint.videoReviewComplete === true,
+      videoReviewEngine: 'FFmpeg freeze and black-screen scan',
+      videoReviewFindingCount: videoFindings.length,
       transcriptReviewChunkCount: checkpoint.textReviewChunkCount || 0,
       reviewCoverageWarnings,
-      reviewComplete: transcriptCrossCheckAvailable && reviewCoverageWarnings.length === 0,
+      reviewComplete: transcriptCrossCheckAvailable && checkpoint.videoReviewComplete === true && reviewCoverageWarnings.length === 0,
       originalSegments: originalResult.segments, dubbedSegments: dubbedResult.segments,
       timestampsAvailable: originalResult.segments.length > 0 && dubbedResult.segments.length > 0,
       transcriptionEngine: originalResult.engine === dubbedResult.engine ? originalResult.engine : `${originalResult.engine} · ${dubbedResult.engine}`,

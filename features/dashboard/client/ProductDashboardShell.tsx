@@ -83,11 +83,15 @@ export default function ProductDashboardShell({
   useEffect(() => {
     const root = document.documentElement;
     const previousColorScheme = root.style.colorScheme;
+    const previousDashboardMode = root.dataset.dashboardMode;
     const previousBodyBackground = document.body.style.backgroundColor;
     root.style.colorScheme = dashboardMode;
-    document.body.style.backgroundColor = dashboardMode === 'dark' ? '#141914' : '';
+    root.dataset.dashboardMode = dashboardMode;
+    document.body.style.backgroundColor = dashboardMode === 'dark' ? '#0d1117' : '';
     return () => {
       root.style.colorScheme = previousColorScheme;
+      if (previousDashboardMode === undefined) delete root.dataset.dashboardMode;
+      else root.dataset.dashboardMode = previousDashboardMode;
       document.body.style.backgroundColor = previousBodyBackground;
     };
   }, [dashboardMode]);

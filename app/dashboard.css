@@ -1863,30 +1863,71 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell.product-satvic-fluid .primary-btn:hover,.app-shell.product-satvic-fluid .hero-button:hover{background:var(--studio-accent-deep,#355442)}
 .app-shell.product-satvic-fluid .project-table-row:hover{background:var(--studio-soft,#edf4ef)}
 
-.app-shell.product-satvic-fluid[data-mode=dark]{color-scheme:dark;--studio-dark-bg:#141914;--studio-dark-surface:#1c221d;--studio-dark-raised:#252c26;--studio-dark-border:#394239;--studio-dark-text:#e6ebe4;--studio-dark-muted:#a8b1a6;background:var(--studio-dark-bg);color:var(--studio-dark-text)}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(h1,h2,h3,h4,p,span,small,label,td,th,summary,button,a,b,strong,time,li){color:var(--studio-dark-text)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.sidebar,.product-rail,.product-drawer,.main-area,.topbar,.panel,.metric-card,.tip-card,.account-menu,[class$="-panel"],[class$="-card"],[class$="-modal"],[class$="-dropdown"],[class$="-table-wrap"],.notification-card,.notification-dashboard,.project-table,.cost-project-table){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .main-area{background:radial-gradient(ellipse at 46% 4%,var(--studio-dark-glow,#42634e26) 0,transparent 36%),linear-gradient(145deg,#171d18 0%,#141914 100%)!important}
+.app-shell.product-satvic-fluid[data-mode=dark]{
+  color-scheme:dark;
+  --studio-dark-bg:#0d1117;
+  --studio-dark-sidebar:#010409;
+  --studio-dark-surface:#161b22;
+  --studio-dark-raised:#21262d;
+  --studio-dark-border:#30363d;
+  --studio-dark-text:#e6edf3;
+  --studio-dark-muted:#8b949e;
+  --studio-dark-hover:#262c36;
+  --map-state-neutral:#30363d;
+  --map-state-stroke:#0d1117;
+  --map-state-selected:var(--studio-accent);
+  --map-status-review:#6e67c8;
+  --map-status-failed:#8f4844;
+  --map-status-processing:#665184;
+  --map-status-ready:#24452f;
+  background:var(--studio-dark-bg);
+  color:var(--studio-dark-text);
+}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.sidebar,.product-rail,.product-drawer){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-sidebar)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.main-area,.topbar){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-bg)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .main-area{background:linear-gradient(145deg,#0f141b 0%,#0d1117 70%)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.panel,.metric-card,.tip-card,.account-menu,[class$="-panel"],[class$="-card"],[class$="-modal"],[class$="-dropdown"],[class$="-table-wrap"],.notification-card,.notification-dashboard,.project-table,.cost-project-table,.qa-flow,.folder-type-column,.folder-overview-empty,.report-page-content,.detail-modal,.spotlight-panel,.so-india-map,.feedback-day-view,.transcript-details){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important;box-shadow:none}
 .app-shell.product-satvic-fluid[data-mode=dark] :is(.content-wrap,.project-table-wrap,.project-table tbody,.cost-project-table tbody){background:transparent!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.sidebar,.product-rail,.product-drawer,.topbar,.panel,.metric-card,.tip-card,.account-menu,[class$="-panel"],[class$="-card"],[class$="-modal"],[class$="-dropdown"],[class$="-table-wrap"],.notification-card,.notification-dashboard,.project-table,.cost-project-table){box-shadow:none}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(input,select,textarea,.search-box,.filter-btn,.local-pill,.cost-duration-field){border-color:var(--studio-dark-border)!important;background:#171d18!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(h1,h2,h3,h4,p,span,small,label,td,th,summary,button,a,b,strong,time,li){color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.section-kicker,.eyebrow,.eyebrow-line,.welcome-subtitle,.nav-label,.nav-count,.breadcrumbs,.crumb-slash,.local-pill,.cost-workspace-caption,.cost-spend-meta,.cost-exchange-rate,.workspace-folders-heading>span,.folder-type-column header small,.folder-type-empty,.folder-library-empty,.project-table-name small,.project-created-cell,.detail-language,.detail-explain,.review-sub,.issue-copy>span,.issue-copy small,.list-footer,.empty-state,.metric-caption,.metric-context,.metric-change,.metric-foot,.project-language-chip,.project-issues,.feedback-card-kicker,.feedback-weekday,.feedback-calendar-footer,.feedback-connect-hint,.feedback-sheet-help,.feedback-respondent,.feedback-day-heading p,.feedback-entry-field small,.feedback-entry-note,.so-india-state-summary span,.so-map-attribution,.cost-detail-field,.cost-detail-field>span,.cost-rate-note,.cost-tech-list span,.notification-card-meta,.notification-empty){color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.sidebar,.product-rail,.product-drawer,.topbar,.panel,.metric-card,.tip-card,.account-menu,[class$="-panel"],[class$="-card"],[class$="-modal"],[class$="-dropdown"],[class$="-table-wrap"],.notification-card,.notification-dashboard,.project-table,.cost-project-table,.qa-flow,.folder-type-column,.folder-overview-empty,.report-page-content,.detail-modal,.spotlight-panel,.so-india-map,.feedback-day-view,.transcript-details){box-shadow:none}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(input,select,textarea,.search-box,.filter-btn,.local-pill,.cost-duration-field,.rename-project-form,.feedback-form-settings){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-bg)!important;color:var(--studio-dark-text)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] :is(input,textarea)::placeholder{color:var(--studio-dark-muted)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.project-table th,.cost-project-table th,.project-table td,.cost-project-table td,.project-table-row,.project-row,.project-actions-menu,.account-theme-options,.cost-rate-details,.cost-estimate-header,.cost-estimate-footer){border-color:var(--studio-dark-border)!important;background:#1c221d!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.project-table-row:hover,.project-row:hover,.nav-item:hover,.icon-btn:hover,.account-menu-option:hover,.account-mode-option:hover,.account-theme-option:hover){background:#2a322b!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .hero-panel{border-color:var(--studio-dark-border)!important;background:linear-gradient(115deg,#222b24 0%,#1b231d 100%)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .hero-panel:before{background:radial-gradient(circle,var(--studio-dark-glow,#42634e26),transparent 70%)}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.nav-item.active,.rail-product.active,.text-action,.workspace-folders-heading button,.cost-rate-details summary,.cost-source-links a){color:var(--studio-accent)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.status-pill.ready,.app-shell .status-pill.ready){border-color:#31583d!important;background:#203b2b!important;color:#a8d7b1!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.ready i{background:#83bd8f!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.needs-review{background:#3d3021!important;color:#e3c18b!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.failed{background:#402624!important;color:#e4a29a!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.in-progress{background:#302842!important;color:#c5b3e4!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.nav-item.active,.rail-product.active){background:#2b372e!important;color:var(--studio-accent)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.secondary-btn,.icon-btn,.filter-btn,.project-download-button,.workspace-folder,.tab,.project-open,.row-more,.notification-open,.notification-delete,.cost-refresh-button,.cost-estimate-footer button,.detail-actions button:not(.primary-btn)){border-color:var(--studio-dark-border)!important;background:#252c26!important;color:var(--studio-dark-text)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.metric-icon,.icon-coral,.icon-green,.icon-blue,.severity-mark,.outcome-mark,.language-bubbles span,.heading-count,.queue-count,.project-thumb){background:#2a322b!important;color:var(--studio-dark-text)!important}
-.app-shell.product-satvic-fluid[data-mode=dark] :is(.secondary-btn:hover,.icon-btn:hover,.filter-btn:hover,.project-download-button:hover,.workspace-folder:hover,.cost-refresh-button:hover,.cost-estimate-footer button:hover){background:#303a31!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .account-menu .account-theme-option[aria-checked=true]{border-color:var(--studio-accent)!important;background:#303a31!important}
-.app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch{background:#4b554b}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.project-table th,.cost-project-table th,.project-table td,.cost-project-table td,.project-table-row,.project-row,.account-theme-options,.cost-rate-details,.cost-estimate-header,.cost-estimate-footer,.rename-project-form,.transcript-results>div,.verdict-card,.human-review-box,.review-note,.feedback-entry,.feedback-form-settings,.cost-estimate-summary article){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.project-table-row:hover,.project-row:hover,.nav-item:hover,.icon-btn:hover,.account-menu-option:hover,.account-mode-option:hover,.account-theme-option:hover,.folder-library-card:hover,.workspace-folder:hover,.feedback-day:hover,.workflow-project-option:hover){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-hover)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.nav-item.active,.rail-product.active,.rail-workspace.active,.drawer-product.active,.text-action,.workspace-folders-heading button,.cost-rate-details summary,.cost-source-links a,.feedback-card-form-link){color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.nav-item.active,.rail-product.active,.rail-workspace.active,.drawer-product.active){background:var(--studio-dark-raised)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.folder-type-column>header,.qa-flow-steps li,.project-toolbar,.project-table-row,.cost-project-table th,.feedback-calendar-footer,.feedback-connect-hint,.feedback-entry-actions,.feedback-form-settings){border-color:var(--studio-dark-border)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.folder-type-column>header>span,.heading-count,.queue-count,.metric-icon,.icon-coral,.icon-green,.icon-blue,.severity-mark,.outcome-mark,.language-bubbles span,.project-thumb,.account-mode-switch,.folder-create-icon,.qa-flow-brand,.feedback-card-icon,.feedback-response-count,.so-india-state-list button){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.folder-library-card,.workspace-folder,.secondary-btn,.icon-btn,.filter-btn,.project-download-button,.tab,.project-open,.row-more,.notification-open,.notification-delete,.cost-refresh-button,.cost-estimate-footer button,.detail-actions button:not(.primary-btn),.qa-flow-action,.folder-back-button,.folder-rename-trigger,.folder-delete-trigger,.folder-cost-estimate-trigger,.folder-share-trigger,.feedback-form-link,.feedback-calendar-toolbar>button,.feedback-back-button,.feedback-form-edit,.feedback-entry-actions button,.workflow-project-option){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.account-menu-option,.account-mode-option,.account-theme-option,.rail-workspace,.rail-product,.rail-account,.drawer-workspace,.drawer-product,.drawer-account,.nav-item,.tab,.text-action,.queue-link,.feedback-form-settings-heading button,.feedback-form-settings-actions button.feedback-remove-form){background:transparent!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.folder-type-column>header small,.workspace-folder>small,.folder-library-card small,.folder-type-empty,.folder-library-empty>span,.project-table-name small,.project-created-cell,.cost-project-table td,.cost-project-table td:first-child small,.metric-caption,.metric-context,.metric-change,.metric-foot,.feedback-calendar-footer>small,.feedback-entry-field small,.feedback-respondent,.so-india-state-summary span,.so-map-attribution){color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.folder-type-column>header>span,.heading-count,.queue-count,.account-theme-options,.account-theme-option[aria-checked=true],.cost-rate-details,.cost-estimate-summary article,.workspace-folder.active,.feedback-day.today,.feedback-form-settings){background:var(--studio-dark-raised)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .folder-library-card{background:var(--studio-dark-raised)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .hero-panel{border-color:var(--studio-dark-border)!important;background:linear-gradient(115deg,#1b2430 0%,#161b22 100%)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .hero-panel:before{background:radial-gradient(circle,var(--studio-accent) 0,transparent 70%);opacity:.12}
+.app-shell.product-satvic-fluid[data-mode=dark] .primary-btn,.app-shell.product-satvic-fluid[data-mode=dark] .hero-button{border-color:var(--studio-accent)!important;background:var(--studio-accent)!important;color:#fff!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .primary-btn:hover,.app-shell.product-satvic-fluid[data-mode=dark] .hero-button:hover{background:var(--studio-accent-deep)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.ready{border-color:#28633b!important;background:#173624!important;color:#7ee787!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.ready i{background:#3fb950!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.needs-review{background:#3a2f1e!important;color:#e3b341!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.failed{background:#3d2326!important;color:#ff7b72!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .status-pill.in-progress{background:#302444!important;color:#d2a8ff!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-menu .account-theme-option[aria-checked=true]{border-color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch{background:#30363d}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch.active{background:var(--studio-accent)}
-.app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch i{background:#f1f3ef}
-.app-shell.product-satvic-fluid[data-mode=dark] .account-logout,.app-shell.product-satvic-fluid[data-mode=dark] .account-logout svg{color:#f18a82!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-mode-switch i{background:#e6edf3}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-logout,.app-shell.product-satvic-fluid[data-mode=dark] .account-logout svg{color:#ff7b72!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .so-india-map svg path{filter:none!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .so-india-map svg path:has(> title[data-selected="true"]){stroke:var(--studio-accent)!important;filter:drop-shadow(0 0 4px var(--studio-accent))!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .so-india-state-list button.active{border-color:var(--studio-accent)!important;background:color-mix(in srgb,var(--studio-accent) 24%,var(--studio-dark-raised))!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .feedback-day.has-feedback{border-color:var(--studio-accent)!important;background:var(--studio-accent)!important;color:#fff!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .feedback-day.has-feedback>i{background:var(--studio-dark-bg)!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.modal-backdrop,.folder-create-backdrop,.workflow-project-backdrop,.spotlight-backdrop,.cost-estimate-backdrop){background:rgba(1,4,9,.78)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .report-page-backdrop{background:var(--studio-dark-bg)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.spotlight-input-row,.spotlight-result,.spotlight-footer,.workflow-project-option,.project-actions-menu){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-text)!important}
+:root[data-dashboard-mode=dark] .project-actions-menu{border-color:#30363d!important;background:#161b22!important;color:#e6edf3!important;box-shadow:0 12px 32px #0008!important}
+:root[data-dashboard-mode=dark] .project-actions-menu :is(button,p,label,select){color:#e6edf3!important}
+:root[data-dashboard-mode=dark] .project-actions-menu button:hover,:root[data-dashboard-mode=dark] .project-actions-menu .project-folder-select:hover{background:#262c36!important}
+:root[data-dashboard-mode=dark] .project-actions-menu .project-delete-option{color:#ff7b72!important}
+:root[data-dashboard-mode=dark] .project-actions-menu .project-delete-confirm{background:#da3633!important;color:#fff!important}

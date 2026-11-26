@@ -11,12 +11,12 @@ export type IndiaMapProject = {
   createdAt?: string;
 };
 
-const neutralState = '#dfe3df';
+const neutralState = 'var(--map-state-neutral, #dfe3df)';
 const statusColors = {
-  review: '#5950cc',
-  failed: '#e9aaa5',
-  processing: '#8b68b8',
-  ready: '#e6f1e5',
+  review: 'var(--map-status-review, #5950cc)',
+  failed: 'var(--map-status-failed, #e9aaa5)',
+  processing: 'var(--map-status-processing, #8b68b8)',
+  ready: 'var(--map-status-ready, #e6f1e5)',
   neutral: neutralState,
 };
 
@@ -79,10 +79,10 @@ export default function IndiaCommunityMapCard({ projects = [], compact = false, 
       width: 350,
       height: 390,
       padding: 9,
-      stateStyle: { stroke: '#ffffff', strokeWidth: 1.8 },
+      stateStyle: { stroke: 'var(--map-state-stroke, #ffffff)', strokeWidth: 1.8 },
       stateFill: name => {
         if (compact) return statusColors[statusForState(name, projects) || 'neutral'];
-        return !compact && name === activeState ? '#8963ad' : neutralState;
+        return !compact && name === activeState ? 'var(--map-state-selected, #8963ad)' : neutralState;
       },
     });
     if (!compact) return svg;

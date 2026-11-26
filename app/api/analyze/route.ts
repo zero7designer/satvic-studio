@@ -827,12 +827,11 @@ export async function POST(request: Request) {
     let originalResult = checkpoint.originalResult;
     const parsedDubScript = checkpoint.dubbedScriptResult || (dubbedSubtitleSrt && parseSarvamSrt(dubbedSubtitleSrt, target.sarvam)) || undefined;
     let dubbedScriptResult = parsedDubScript;
-    let dubbedResult = generatedBySarvam
-      ? checkpoint.dubbedResult
-      : checkpoint.dubbedResult || dubbedScriptResult;
-    if (checkpoint.transcriptComparisonVersion !== 7) {
+    let dubbedResult = checkpoint.dubbedResult;
+    if (dubbedResult && dubbedResult.engine !== 'Sarvam Saaras v4') dubbedResult = checkpoint.dubbedResult = undefined;
+    if (checkpoint.transcriptComparisonVersion !== 8) {
       if (generatedBySarvam && originalResult?.engine !== 'Sarvam Saaras v4') originalResult = checkpoint.originalResult = undefined;
-      if (generatedBySarvam && dubbedResult?.engine !== 'Sarvam Saaras v4') dubbedResult = checkpoint.dubbedResult = undefined;
+      dubbedResult = checkpoint.dubbedResult = undefined;
       checkpoint.dubbedAudioResult = undefined;
       checkpoint.textReviewComplete = false;
       checkpoint.textReviewAttempted = false;
@@ -842,7 +841,7 @@ export async function POST(request: Request) {
       checkpoint.textBackTranslations = {};
       checkpoint.transcriptReviewModels = [];
       checkpoint.backTranslation = undefined;
-      checkpoint.transcriptComparisonVersion = 7;
+      checkpoint.transcriptComparisonVersion = 8;
       checkpoint.audioReviewComplete = false;
       checkpoint.audioReviewChunks = {};
       checkpoint.audioReviewModels = [];
@@ -885,7 +884,6 @@ export async function POST(request: Request) {
       dubbedResult = newDubResult;
     }
     if (!originalResult || !dubbedResult) throw new Error('Sarvam Saaras did not return both source and dubbed transcripts.');
-    if (!generatedBySarvam) dubbedScriptResult ||= dubbedResult;
     if (generatedBySarvam && dubbedScriptResult) checkpoint.dubbedScriptResult = dubbedScriptResult;
     markStage('Preparing transcript and audio evidence');
     updateAnalysisProgress(progressId, stage, 66);

@@ -1883,6 +1883,9 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
   background:var(--studio-dark-bg);
   color:var(--studio-dark-text);
 }
+html:has(.app-shell.product-satvic-fluid[data-mode=dark]),
+body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d1117!important}
+.app-shell.product-satvic-fluid[data-mode=dark]{border-color:#30363d!important;box-shadow:none!important}
 .app-shell.product-satvic-fluid[data-mode=dark] :is(.sidebar,.product-rail,.product-drawer){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-sidebar)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] :is(.main-area,.topbar){border-color:var(--studio-dark-border)!important;background:var(--studio-dark-bg)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .main-area{background:linear-gradient(145deg,#0f141b 0%,#0d1117 70%)!important}

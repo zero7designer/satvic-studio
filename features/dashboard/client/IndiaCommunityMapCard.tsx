@@ -16,7 +16,7 @@ const statusColors = {
   review: 'var(--map-status-review, #5950cc)',
   failed: 'var(--map-status-failed, #e9aaa5)',
   processing: 'var(--map-status-processing, #8b68b8)',
-  ready: 'var(--map-status-ready, #e6f1e5)',
+  ready: 'var(--map-status-ready, #8fae92)',
   neutral: neutralState,
 };
 

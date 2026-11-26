@@ -1,11 +1,11 @@
 # Satvic Studio — AI Dub QA
 
-A local-first dubbing workflow for creating a target-language video with Sarvam and checking it when you do not understand the target language. Choose **Generate with Sarvam** to upload one source, wait for Sarvam to dub and export it, then automatically run the existing transcription and Gemini audio QA comparison. Or choose **I already have a dub** to compare two existing files. Reports show suspected issues with source and dub time ranges; click a time to play that moment. The transcript and back-translation are supporting evidence, not the final result.
+A local-first dubbing workflow for creating a target-language video with Sarvam and checking it when you do not understand the target language. Choose **Generate with Sarvam** to upload one source, wait for Sarvam to dub and export it, then run Saaras transcription and Gemini transcript and audio QA. Or choose **I already have a dub** to compare two existing files. Reports show suspected issues with source and dub time ranges; click a time to play that moment. Transcript comparison and audio review both contribute findings.
 
 ## Requirements
 
 - Node.js 20.9+
-- Sarvam API key with Dubbing, speech-to-text and translation access
+- Sarvam API key with Dubbing and speech-to-text access
 - Gemini API key for direct audio comparison (required for the AI listening report)
 - Optional Gmail App Password for email notifications to the signed-in Google account
 
@@ -81,8 +81,8 @@ Open [http://localhost:3000](http://localhost:3000). Sarvam Saaras handles speec
 1. Click **New QA project** and choose the source and dubbed languages.
 2. Upload the original video and finished dub.
 3. In **Generate with Sarvam** mode, Sarvam receives the original file, creates a dubbed video in the selected target language, and the app downloads that export locally. Dubbing is billed according to your Sarvam account and plan. The existing-dub mode skips this step.
-4. For a Sarvam-generated dub, the app uses Sarvam's downloaded SRT for dub text and transcribes only the original audio with Saaras v4. Sarvam Translate converts the SRT to the source language as supporting evidence. Gemini compares the original transcript with the SRT and back-translation, then separately checks both audio tracks in 30-second chunks for spoken-content and voice-casting issues. This avoids a second Saaras transcription of the finished dub.
-5. For an existing dub, Sarvam Saaras transcribes both tracks with timestamps and Sarvam Translate back-translates the dub transcript as supporting report evidence. Gemini reviews the actual compressed audio and compares the transcripts. Findings show whether the audio and transcript checks agree; times are anchored to transcript segments when available.
+4. For a Sarvam-generated dub, Sarvam Saaras v4 transcribes both the original and finished dub with timestamps. Gemini translates the Saaras dubbed transcript into the source language and compares it with the original Saaras transcript. Separately, Gemini listens to both audio tracks in 30-second chunks for spoken-content and voice-casting issues. Sarvam's downloaded SRT is supporting evidence only.
+5. For an existing dub, Sarvam Saaras transcribes both tracks with timestamps. Gemini translates the dubbed transcript into the source language and compares the transcripts, then reviews the actual audio tracks. Findings show whether the audio and transcript checks agree; times are anchored to transcript segments when available.
 6. While processing, the analysis dialog shows elapsed time, provider stage and progress. The report lists suspected findings with categories and source/dub time ranges. It avoids model-reported confidence percentages; matching audio and text evidence is shown as corroboration, not proof. Click a time button to jump to that moment. Generated Sarvam dubs can also be downloaded from the report. The transcript evidence can be expanded, and the JSON export includes findings and timestamps.
 
 ## Preflight, storage and provider checks

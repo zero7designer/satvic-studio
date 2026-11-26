@@ -185,6 +185,9 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
     // a checkpoint after every provider job and audio chunk. Never retry other
     // HTTP failures here, since they usually indicate a real auth/config issue.
     if ([408, 429, 504].includes(response.status) || /request timed out|function execution timed out/i.test(message) || /QA checkpoint retry:/i.test(message)) {
+      if (/Sarvam transcription job .+ is still processing/i.test(message)) {
+        return { jobError: message, dubbedBlobUrl };
+      }
       return { jobError: `QA did not finish within Vercel’s request window. Your saved dub is safe. The workflow will resume from the last saved QA checkpoint; it will not create another dub.`, dubbedBlobUrl };
     }
     return { jobError: `QA failed (HTTP ${response.status}): ${message}`, dubbedBlobUrl };
@@ -200,17 +203,18 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
 }
 
 async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null) {
-  // QA retries resume saved Gemini review checkpoints and never start another dub.
+  // QA retries resume saved Saaras transcription and Gemini review checkpoints without starting another dub.
   const maxResumeAttempts = 40;
   for (let attempt = 1; attempt <= maxResumeAttempts; attempt += 1) {
     const result = await runQaAttempt(input, dubbedBlobUrl, dubbedSubtitleSrt);
     if (!('jobError' in result) || typeof result.jobError !== 'string') return result;
+    const canResumeSarvam = /Sarvam transcription job .+ is still processing/i.test(result.jobError);
     const canResumeCheckpoint = /QA did not finish within Vercel|QA reached Vercel|QA checkpoint retry:/i.test(result.jobError);
-    if (!canResumeCheckpoint || attempt === maxResumeAttempts) return result;
+    if ((!canResumeSarvam && !canResumeCheckpoint) || attempt === maxResumeAttempts) return result;
     console.info(`[dubbing-workflow] job=${input.dbJobId} resuming saved QA checkpoint check=${attempt + 1}/${maxResumeAttempts}`);
-    await sleep('20s');
+    await sleep(canResumeSarvam ? '10s' : '20s');
   }
-  return { jobError: 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Gemini review checkpoints.' , dubbedBlobUrl };
+  return { jobError: 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Saaras transcription and Gemini review checkpoints.' , dubbedBlobUrl };
 }
 
 export async function generateAndReview(input: JobInput) {

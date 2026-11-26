@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       storage: { usedBytes: Math.max(0, totalBytes - cleanedBytes), limitBytes, availableBytes: remainingBytes, requiredBytes, cleanedBytes },
       reclaimableBytes: action === 'inspect' ? reclaimable : undefined,
       cleanup: cleanedBytes ? `Deleted ${cleanup.length} inactive media file(s) (${formatBytes(cleanedBytes)}). QA report JSON and active jobs were kept.` : null,
-      limitations: 'Storage is an estimate of objects in this project only. It cannot read Vercel monthly-average storage/transfer. Gemini check confirms the model responds now but does not verify QA accuracy or reserve future quota. If Flash Lite is the only transcript reviewer and returns no findings, the report will be marked Needs review. Set GEMINI_TRANSCRIPT_REVIEW_MODEL to a stronger Flash model available to your key for the text comparison. Sarvam wallet credits must be checked in Sarvam Billing.',
+      limitations: 'Storage is an estimate of objects in this project only. It cannot read Vercel monthly-average storage/transfer. Gemini check confirms the model responds now but does not verify QA accuracy or reserve future quota. If Flash Lite is the only transcript reviewer and returns no findings, the report will be marked Needs review. Set GEMINI_TRANSCRIPT_REVIEW_MODEL to a stronger Flash model available to your key for the text comparison. Generated dubbing also triggers two billable Saaras transcript jobs after the dub; this QA path does not call Sarvam Translate. Sarvam wallet credits must be checked in Sarvam Billing.',
     }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Preflight check failed.';

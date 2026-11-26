@@ -13,6 +13,9 @@ import NavigationLoading from '@/features/navigation/NavigationLoading';
 export const metadata: Metadata = {
   title: 'Satvic Studio | Multilingual Video QA',
   description: 'A private workspace for comparing dubbed audio and reviewing multilingual video quality.',
+  icons: {
+    icon: '/sarvamlogo.svg',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

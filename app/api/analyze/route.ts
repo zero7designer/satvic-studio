@@ -29,6 +29,7 @@ const LANGUAGES: Record<string, { sarvam: string }> = {
 const TARGET_LANGUAGE_REVIEW_NOTES: Record<string, string> = {
   Punjabi: 'Punjabi reference note: A Start in Punjabi (Academy of the Punjab in North America), lesson 15, teaches rīn/rinn as “cook” and rīdda as “cooked,” including the example of cooked dal. Do not interpret a Punjabi cooking form applied to dal as rajma or an added ingredient without clear evidence in the actual phrase.',
 };
+const LITE_CLEAN_REPORT_WARNING = 'Gemini Flash Lite or an unrecorded reviewer returned no findings.';
 function targetLanguageReviewNote(language: string) {
   return TARGET_LANGUAGE_REVIEW_NOTES[language] || `Respect dialects and regional forms in ${language}. Do not call an unfamiliar inflection or synonym a changed ingredient unless the quoted dub wording clearly names a different food.`;
 }
@@ -1040,6 +1041,7 @@ export async function POST(request: Request) {
     if (!textFindings.length && transcriptCrossCheckAvailable && (!transcriptReviewer || /lite/i.test(transcriptReviewer))) {
       reviewCoverageWarnings.push('Gemini Flash Lite or an unrecorded reviewer returned no findings. This is not a reliable clean verdict; use a stronger transcript-review model or manually check the report transcripts and audio.');
     }
+    const blockingCoverageWarnings = reviewCoverageWarnings.filter(warning => !warning.startsWith(LITE_CLEAN_REPORT_WARNING));
     markStage('Finishing the timestamped report');
     updateAnalysisProgress(progressId, stage, 97);
     updateAnalysisProgress(progressId, 'Analysis complete', 100, 'complete');
@@ -1063,7 +1065,7 @@ export async function POST(request: Request) {
       videoReviewFindingCount: videoFindings.length,
       transcriptReviewChunkCount: checkpoint.textReviewChunkCount || 0,
       reviewCoverageWarnings,
-      reviewComplete: transcriptCrossCheckAvailable && checkpoint.videoReviewComplete === true && reviewCoverageWarnings.length === 0,
+      reviewComplete: transcriptCrossCheckAvailable && checkpoint.videoReviewComplete === true && blockingCoverageWarnings.length === 0,
       originalSegments: originalResult.segments, dubbedSegments: dubbedResult.segments,
       timestampsAvailable: originalResult.segments.length > 0 && dubbedResult.segments.length > 0,
       transcriptionEngine: originalResult.engine === dubbedResult.engine ? originalResult.engine : `${originalResult.engine} · ${dubbedResult.engine}`,

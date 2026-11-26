@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowRight, AudioLines, Bell, Calculator, CheckCheck, ChevronDown,
+  ArrowRight, AudioLines, Bell, Calculator, Check, CheckCheck, ChevronDown,
   LogOut, Menu,
-  PanelLeftClose,
+  Palette, PanelLeftClose,
   PanelLeftOpen, Plus, Settings, Trash2, X, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
@@ -32,6 +32,13 @@ type ProductDashboardShellProps = {
 };
 
 type DashboardNotification = { id: string; title: string; description: string; kind: string; createdAt: string; href: string };
+type DashboardTheme = 'sage' | 'lavender' | 'ocean' | 'terracotta';
+const dashboardThemes: { id: DashboardTheme; label: string }[] = [
+  { id: 'sage', label: 'Sage' },
+  { id: 'lavender', label: 'Lavender' },
+  { id: 'ocean', label: 'Ocean' },
+  { id: 'terracotta', label: 'Terracotta' },
+];
 
 export default function ProductDashboardShell({
   productId,
@@ -51,12 +58,24 @@ export default function ProductDashboardShell({
   const [featureRailCollapsed, setFeatureRailCollapsed] = useState(false);
   const [productMenuOpen, setProductMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [dashboardTheme, setDashboardTheme] = useState<DashboardTheme>('sage');
+  const [themeLoaded, setThemeLoaded] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationError, setNotificationError] = useState('');
   const [followingNotificationId, setFollowingNotificationId] = useState<string | null>(null);
   const [activeFeatureId, setActiveFeatureId] = useState(initialFeatureId ?? product.groups[0].features[1]?.id ?? product.groups[0].features[0].id);
+
+  useEffect(() => {
+    const savedTheme = dashboardThemes.find(option => option.id === window.localStorage.getItem('satvic-studio-dashboard-theme'));
+    if (savedTheme) setDashboardTheme(savedTheme.id);
+    setThemeLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (themeLoaded) window.localStorage.setItem('satvic-studio-dashboard-theme', dashboardTheme);
+  }, [dashboardTheme, themeLoaded]);
 
   useEffect(() => {
     const requested = searchParams.get('feature') || (productId === 'satvic-fluid' && searchParams.has('qaRunId') ? 'start-review' : null);
@@ -167,7 +186,7 @@ export default function ProductDashboardShell({
   }
 
   return (
-    <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`}>
+    <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`} data-theme={dashboardTheme}>
       <nav className={`product-rail${productMenuOpen ? ' product-rail-expanded' : ''}`} aria-label="Satvic products">
         <button type="button" className="rail-workspace" aria-label="Open product menu" aria-haspopup="true" aria-expanded={productMenuOpen} title="Satvic Studio and tools" onClick={() => { setProductMenuOpen(open => !open); setAccountMenuOpen(false); setNotificationOpen(false); }}>
           <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
@@ -209,7 +228,7 @@ export default function ProductDashboardShell({
         {featureRailCollapsed && <button type="button" className="rail-account feature-rail-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)} title={accountName}><span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span></button>}
       </aside>
 
-      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu"><button role="menuitem" onClick={() => {setAccountMenuOpen(false);onNotice('Account settings are ready for this workspace.')}}><Settings size={18} /><span>Settings</span></button><form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={18} /><span>Logout</span></PendingSubmitButton></form></div>}
+      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu"><div className="account-theme-picker" role="group" aria-labelledby="account-theme-heading"><div className="account-theme-heading" id="account-theme-heading"><Palette size={16}/><span>Color theme</span></div><div className="account-theme-options">{dashboardThemes.map(option => <button type="button" role="menuitemradio" aria-checked={dashboardTheme === option.id} className="account-theme-option" key={option.id} onClick={() => setDashboardTheme(option.id)}><span className={`account-theme-swatch ${option.id}`}/><span>{option.label}</span>{dashboardTheme === option.id && <Check size={14}/>}</button>)}</div></div><button role="menuitem" onClick={() => {setAccountMenuOpen(false);onNotice('Account settings are ready for this workspace.')}}><Settings size={18} /><span>Settings</span></button><form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={18} /><span>Logout</span></PendingSubmitButton></form></div>}
 
       <section className="main-area">
         <header className="topbar"><button className="icon-btn menu-trigger" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Menu size={19} /></button></header>

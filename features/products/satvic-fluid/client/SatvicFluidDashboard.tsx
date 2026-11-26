@@ -192,7 +192,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [notice, setNotice] = useState('');
   const [source, setSource] = useState('Hindi');
   const [target, setTarget] = useState('Tamil');
-  const [speakerCount, setSpeakerCount] = useState(2);
   const [generationMode, setGenerationMode] = useState<'sarvam' | 'existing'>('sarvam');
   const [projectName, setProjectName] = useState('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
@@ -842,7 +841,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     if (!cleanProjectName) { setNotice('Enter a project name to continue.'); return; }
     if (!originalFile || (generationMode === 'existing' && !dubbedFile)) { setNotice(generationMode === 'sarvam' ? 'Select the original video to send to Sarvam.' : 'Select both the original and dubbed video to start QA.'); return; }
     if (generationMode === 'sarvam' && source === target) { setNotice('Choose a target language different from the source language.'); return; }
-    const fingerprint = `${generationMode}:${originalFile.name}:${originalFile.size}:${dubbedFile?.name || ''}:${dubbedFile?.size || 0}:${source}:${target}:${generationMode === 'sarvam' ? speakerCount : ''}`;
+    const fingerprint = `${generationMode}:${originalFile.name}:${originalFile.size}:${dubbedFile?.name || ''}:${dubbedFile?.size || 0}:${source}:${target}`;
     if (!preflight || preflight.fingerprint !== fingerprint) {
       setBusy(true);
       setCheckingReadiness(true);
@@ -897,7 +896,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           onUploadProgress: ({ percentage }) => setAnalysisProgress({ stage: `Uploading video to secure storage · ${Math.round(percentage)}%`, percent: Math.max(4, Math.round(percentage * 0.35)), status: 'processing', startedAt }),
         });
         setAnalysisProgress({ stage: 'Handing job to the server workflow', percent: 38, status: 'processing', startedAt });
-        const startResponse = await fetch('/api/jobs/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ originalBlobUrl: stored.url, originalName: originalFile.name, sourceLanguage: source, targetLanguage: target, speakerCount, projectName: cleanProjectName, folderId: projectFolderId || null }) });
+        const startResponse = await fetch('/api/jobs/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ originalBlobUrl: stored.url, originalName: originalFile.name, sourceLanguage: source, targetLanguage: target, projectName: cleanProjectName, folderId: projectFolderId || null }) });
         const startBody = await readApiJson(startResponse);
         if (!startResponse.ok) throw new Error(startBody.error || 'Could not start the server-side dubbing job.');
         const title = cleanProjectName;
@@ -1444,7 +1443,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         <label className="field-label">Video name <span>AUTOMATIC</span><input className="text-input" value={projectName} readOnly aria-readonly="true" /></label>
         <label className="field-label">Save in folder<select value={projectFolderId} onChange={event=>setProjectFolderId(event.target.value)}><option value="">No folder</option>{folders.map(folder=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
         <div className="language-fields"><label className="field-label">Source language<select value={source} onChange={e=>{setSource(e.target.value);setProjectName(`${e.target.value} to ${target}`)}}>{['Hindi','English','Marathi','Bengali','Gujarati','Tamil','Telugu','Kannada','Punjabi','Malayalam','Odia','Assamese','Urdu','Sanskrit','Nepali'].map(language=><option key={language}>{language}</option>)}</select></label><label className="field-label">Target language<select value={target} onChange={e=>{setTarget(e.target.value);setProjectName(`${source} to ${e.target.value}`)}}>{languages.map(language=><option key={language}>{language}</option>)}</select></label></div>
-        {generationMode==='sarvam' && <label className="field-label">People speaking in the source<select value={speakerCount} onChange={event=>{setSpeakerCount(Number(event.target.value));setPreflight(null)}}>{[1,2,3,4,5].map(count=><option key={count} value={count}>{count} {count===1?'speaker':'speakers'}</option>)}</select><small>Choose the number of distinct voices Sarvam should preserve. Select 2 for a two-person video.</small></label>}
         <div className="video-upload-grid">
           <label className="upload-box">
             <input type="file" accept="video/*,audio/*" onChange={e=>{setOriginalFile(e.target.files?.[0] ?? null);setPreflight(null)}}/>

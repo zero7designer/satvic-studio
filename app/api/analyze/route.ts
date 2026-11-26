@@ -524,9 +524,12 @@ async function geminiTranscriptReviewPass(source: Transcript, dub: Transcript, c
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for transcript review.');
   const model = process.env.GEMINI_TRANSCRIPT_REVIEW_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
-  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Compare each source idea against the spoken dub and each dub idea against the source. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. These are adjacent timestamped passages from Saaras v4 transcripts. Compare by meaning, not exact wording. Check every number, name, quantity, negation, instruction, omission, and addition. Natural rewording is correct. The dub may be slightly shifted in time; use the supplied neighboring context and do not call something omitted or added just because it is absent from this passage. The back-translation is supporting evidence only; a back-translation difference alone is not a dub mistake. Quote exact source and target-language spoken-dub transcript phrases. Do not infer pronunciation, voice gender, or accent from transcript text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in these passages, in separate findings, with the closest zero-based segment indexes. Return an empty list when no mismatch is evident. JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact spoken-dub phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
+  const dubEvidence = dub.engine === 'Sarvam dubbing SRT export'
+    ? 'The target-language text is the SRT exported by Sarvam from this dubbing job. Treat it as the dub script; the separate audio review verifies what the video actually says.'
+    : 'The target-language text is Saaras v4 transcription of the finished dub audio.';
+  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Source language: ${sourceLanguage}; target dub language: ${targetLanguage}. The source passage is from transcription of the original audio. ${dubEvidence} Translate/interpret the target-language passage into ${sourceLanguage} internally, then compare its meaning with the source passage. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording is correct. These are adjacent timestamped passages; allow for modest timing shifts and use the neighboring overlap. Do not call content missing or added only because it is absent from one passage. Use the back-translation below as supporting evidence when supplied, but a back-translation difference alone is not a dub mistake. Quote the exact source and target-language text supplied. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings, with the closest zero-based segment indexes. Return an empty list when no mismatch is evident. JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact target-language phrase","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
 
-SOURCE (${sourceLanguage}):\n${chunk.sourceText}\n\nSPOKEN DUB (${targetLanguage}):\n${chunk.dubText}${chunk.backTranslationText ? `\n\nDUB BACK-TRANSLATION (${sourceLanguage}, supporting evidence only):\n${chunk.backTranslationText}` : ''}`;
+SOURCE (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB TRANSCRIPT/SRT (${targetLanguage}):\n${chunk.dubText}${chunk.backTranslationText ? `\n\nDUB BACK-TRANSLATION (${sourceLanguage}, supporting evidence only):\n${chunk.backTranslationText}` : ''}`;
   const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 150_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
@@ -561,7 +564,7 @@ async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, 
   const body = {
     model,
     input: [
-      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The supplied Saaras transcripts help locate speech but may contain transcription errors; the audio itself is authoritative. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching transcript as proof that the dub audio is correct. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied transcripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[ {"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}` },
+      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The supplied source transcript and dub transcript or SRT help locate speech but may contain omissions or errors; the attached audio itself is authoritative. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching transcript as proof that the dub audio is correct. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied transcripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[ {"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}` },
       { type: 'audio', data: sourceClip.data, mime_type: sourceClip.mime_type },
       { type: 'audio', data: dubClip.data, mime_type: dubClip.mime_type },
     ],
@@ -671,11 +674,13 @@ export async function POST(request: Request) {
             const parsed = JSON.parse(new TextDecoder('utf-8').decode(cachedBytes)) as Json;
             if (parsed.kind === 'qa-checkpoint') checkpoint = parsed as QaCheckpoint;
             else {
-              if (parsed.transcriptionEngine === 'Sarvam Saaras v4'
-                && typeof parsed.originalTranscript === 'string' && Array.isArray(parsed.originalSegments)
-                && typeof parsed.dubbedTranscript === 'string' && Array.isArray(parsed.dubbedSegments)) {
+              if (typeof parsed.originalTranscript === 'string' && Array.isArray(parsed.originalSegments)) {
                 checkpoint.originalResult = { transcript: parsed.originalTranscript, segments: parsed.originalSegments, detectedLanguage: parsed.sourceLanguage || json.sourceLanguage || '', engine: 'Sarvam Saaras v4' };
-                checkpoint.dubbedResult = { transcript: parsed.dubbedTranscript, segments: parsed.dubbedSegments, detectedLanguage: parsed.targetLanguage || json.targetLanguage || '', engine: 'Sarvam Saaras v4' };
+                if (parsed.generatedBySarvam === true && typeof parsed.dubSubtitleTranscript === 'string' && parsed.dubSubtitleTranscript.trim()) {
+                  checkpoint.dubbedScriptResult = { transcript: parsed.dubSubtitleTranscript, segments: Array.isArray(parsed.dubSubtitleSegments) ? parsed.dubSubtitleSegments : [], detectedLanguage: parsed.targetLanguage || json.targetLanguage || '', engine: 'Sarvam dubbing SRT export' };
+                } else if (typeof parsed.dubbedTranscript === 'string' && Array.isArray(parsed.dubbedSegments)) {
+                  checkpoint.dubbedResult = { transcript: parsed.dubbedTranscript, segments: parsed.dubbedSegments, detectedLanguage: parsed.targetLanguage || json.targetLanguage || '', engine: 'Sarvam Saaras v4' };
+                }
                 if (typeof parsed.backTranslation === 'string' && parsed.backTranslation.trim()) checkpoint.backTranslation = parsed.backTranslation;
               }
               checkpointUrl = '';
@@ -740,11 +745,11 @@ export async function POST(request: Request) {
     const parsedDubScript = checkpoint.dubbedScriptResult || (dubbedSubtitleSrt && parseSarvamSrt(dubbedSubtitleSrt, target.sarvam)) || undefined;
     let dubbedScriptResult = parsedDubScript;
     let dubbedResult = generatedBySarvam
-      ? checkpoint.dubbedResult
+      ? dubbedScriptResult || checkpoint.dubbedResult
       : checkpoint.dubbedResult || dubbedScriptResult;
-    if (generatedBySarvam && checkpoint.transcriptComparisonVersion !== 5) {
+    if (generatedBySarvam && checkpoint.transcriptComparisonVersion !== 6) {
       if (originalResult?.engine !== 'Sarvam Saaras v4') originalResult = checkpoint.originalResult = undefined;
-      if (dubbedResult?.engine !== 'Sarvam Saaras v4') dubbedResult = checkpoint.dubbedResult = undefined;
+      if (dubbedResult?.engine !== 'Sarvam Saaras v4' && dubbedResult?.engine !== 'Sarvam dubbing SRT export') dubbedResult = checkpoint.dubbedResult = undefined;
       checkpoint.dubbedAudioResult = undefined;
       checkpoint.textReviewComplete = false;
       checkpoint.textReviewAttempted = false;
@@ -752,8 +757,8 @@ export async function POST(request: Request) {
       checkpoint.textReviewChunks = {};
       checkpoint.textReviewChunkCount = undefined;
       checkpoint.transcriptReviewModels = [];
-      if (!checkpoint.backTranslation?.trim()) checkpoint.backTranslation = undefined;
-      checkpoint.transcriptComparisonVersion = 5;
+      checkpoint.backTranslation = undefined;
+      checkpoint.transcriptComparisonVersion = 6;
       checkpoint.audioReviewComplete = false;
       checkpoint.audioReviewChunks = {};
       checkpoint.audioReviewModels = [];
@@ -769,7 +774,7 @@ export async function POST(request: Request) {
       checkpoint.audioReviewPromptVersion = 2;
     }
     if (!originalResult || !dubbedResult) {
-      markStage(generatedBySarvam ? 'Transcribing original and dubbed audio with Saaras' : dubbedResult ? 'Transcribing source with Sarvam' : 'Transcribing source and dubbed media with Sarvam');
+      markStage(generatedBySarvam && dubbedResult?.engine === 'Sarvam dubbing SRT export' ? 'Transcribing original and loading Sarvam dub SRT' : generatedBySarvam ? 'Transcribing original and dubbed audio with Saaras' : dubbedResult ? 'Transcribing source with Sarvam' : 'Transcribing source and dubbed media with Sarvam');
       updateAnalysisProgress(progressId, stage, 24);
       const transcriptionJobCallbacks = (track: 'original' | 'dubbed') => ({
         onJobStarted: async (jobId: string) => {
@@ -924,9 +929,10 @@ export async function POST(request: Request) {
     updateAnalysisProgress(progressId, 'Analysis complete', 100, 'complete');
     const report: Json = {
       project: historyProjectName || original.name.replace(/\.[^.]+$/, ''),
-      sourceLanguage, targetLanguage, createdAt: new Date().toISOString(),
+      sourceLanguage, targetLanguage, generatedBySarvam, createdAt: new Date().toISOString(),
       originalTranscript: originalResult.transcript, dubbedTranscript: dubbedResult.transcript,
       dubSubtitleTranscript: generatedBySarvam ? dubbedScriptResult?.transcript || '' : '',
+      dubSubtitleSegments: generatedBySarvam ? dubbedScriptResult?.segments || [] : [],
       backTranslation, findings: combinedFindings,
       transcriptCrossCheckAvailable,
       transcriptCrossCheckError,

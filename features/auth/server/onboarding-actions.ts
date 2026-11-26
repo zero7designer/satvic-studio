@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { isProfileAvatarId } from '@/features/auth/profile-avatar';
 
-const allowedRoles = new Set(['Founder Office', 'Dubbing & Localization', 'Content / QA Reviewer', 'Admin', 'Other']);
+const allowedRoles = new Set(['Dubbing & Localization', 'Content / QA Reviewer', 'Admin', 'Other']);
 
 export async function completeProfile(formData: FormData) {
   const fullName = String(formData.get('fullName') || '').trim().replace(/\s+/g, ' ');

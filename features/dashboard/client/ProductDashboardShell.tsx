@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Archive, ArrowRight, AudioLines, Bell, BookOpen, Brain, Building2, CalendarDays, Calculator, Check, CheckCheck, ChevronDown,
-  FileText, Globe2, LayoutDashboard, Lightbulb, ListChecks, LogOut, Menu, MessageSquare,
+  ArrowRight, AudioLines, Bell, Calculator, CheckCheck, ChevronDown,
+  LogOut, Menu,
   PanelLeftClose,
-  PanelLeftOpen, Plus, Settings, Settings2, Trash2, X, type LucideIcon,
-  Users,
+  PanelLeftOpen, Plus, Settings, Trash2, X, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
 import { getProduct, products, type ProductFeature, type ProductId } from '@/features/products/registry';
@@ -18,22 +17,6 @@ import { startNavigationLoading } from '@/features/navigation/NavigationLoading'
 const featureIcons: Record<ProductFeature['icon'], LucideIcon> = {
   plus: Plus,
   workflow: CheckCheck,
-  projects: FileText,
-  review: ListChecks,
-  languages: Globe2,
-  book: BookOpen,
-  settings: Settings2,
-  home: LayoutDashboard,
-  focus: Check,
-  decisions: CheckCheck,
-  notes: FileText,
-  roadmap: ListChecks,
-  brain: Brain,
-  voice: MessageSquare,
-  meeting: CalendarDays,
-  people: Users,
-  idea: Lightbulb,
-  memory: Archive,
   calculator: Calculator,
 };
 
@@ -73,9 +56,6 @@ export default function ProductDashboardShell({
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationError, setNotificationError] = useState('');
   const [followingNotificationId, setFollowingNotificationId] = useState<string | null>(null);
-  const founderOfficeEnabled = false;
-  const [satvicDashboardEnabled, setSatvicDashboardEnabled] = useState(false);
-  const [satvicDashboardPreferenceLoading, setSatvicDashboardPreferenceLoading] = useState(true);
   const [activeFeatureId, setActiveFeatureId] = useState(initialFeatureId ?? product.groups[0].features[1]?.id ?? product.groups[0].features[0].id);
 
   useEffect(() => {
@@ -123,23 +103,6 @@ export default function ProductDashboardShell({
     };
   }, [productMenuOpen]);
 
-  useEffect(() => {
-    let active = true;
-    fetch('/api/preferences/satvic-dashboard', { cache: 'no-store' })
-      .then(async response => ({ response, body: await response.json().catch(() => ({})) }))
-      .then(({ response, body }) => { if (active && response.ok) setSatvicDashboardEnabled(body.enabled === true); })
-      .catch(() => {})
-      .finally(() => { if (active) setSatvicDashboardPreferenceLoading(false); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (productId === 'founder-office' && !founderOfficeEnabled) {
-      startNavigationLoading();
-      router.replace('/dashboard/satvic-fluid');
-    }
-  }, [founderOfficeEnabled, productId, router]);
-
   const navigateToProduct = (href: string) => {
     setNotificationOpen(false);
     setProductMenuOpen(false);
@@ -147,27 +110,12 @@ export default function ProductDashboardShell({
     router.push(href);
   };
 
-  const openSatvicDashboard = () => {
-    if (satvicDashboardPreferenceLoading) return;
-    if (!satvicDashboardEnabled) return;
-    navigateToProduct('/dashboard');
-  };
-
   const accountName = accountEmail
     ? accountEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
     : 'Account';
   const workspaceName = accountName === 'Account' ? 'Satvic Studio Workspace' : `${accountName}'s Workspace`;
-  const visibleProducts = products.filter(item => item.id !== 'founder-office' || founderOfficeEnabled);
-  const visibleNotifications = notifications.filter(item => item.kind !== 'Founder Office' || founderOfficeEnabled);
-
-  function toggleFounderOffice() {
-    onNotice('Founder Office is coming soon.');
-  }
-
-  function toggleSatvicDashboard() {
-    if (satvicDashboardPreferenceLoading) return;
-    onNotice('Satvic Dashboard is coming soon.');
-  }
+  const visibleProducts = products;
+  const visibleNotifications = notifications;
 
   const loadNotifications = useCallback(async () => {
     setNotificationsLoading(true);
@@ -226,7 +174,7 @@ export default function ProductDashboardShell({
         </button>
         <div className="rail-product-list" aria-label="Products">
           {visibleProducts.map(item => <button key={item.id} type="button" aria-current={!hideFeatureNavigation && item.id === productId ? 'page' : undefined} className={`rail-product${!hideFeatureNavigation && item.id === productId ? ' active' : ''}`} onClick={() => navigateToProduct(item.href)} title={item.name}>
-            <span className="rail-product-icon">{item.id === 'satvic-fluid' ? <AudioLines size={19} /> : <Building2 size={19} />}</span>
+            <span className="rail-product-icon"><AudioLines size={19} /></span>
           </button>)}
         </div>
         <div className="rail-spacer" />
@@ -237,13 +185,13 @@ export default function ProductDashboardShell({
           <span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span>
         </button>
         <section className="product-drawer" aria-label="Satvic Studio and product switcher">
-          <button type="button" className={`drawer-workspace${!satvicDashboardEnabled ? ' dashboard-disabled' : ''}`} aria-label="Open Satvic Studio dashboard" aria-disabled={!satvicDashboardEnabled || satvicDashboardPreferenceLoading} onClick={openSatvicDashboard}>
+          <div className="drawer-workspace drawer-workspace-static" aria-label="Satvic Studio workspace">
             <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
             <span><b>Satvic Studio</b><small>{workspaceName}</small></span>
-          </button>
+          </div>
           <div className="drawer-product-list" aria-label="Products">
             {visibleProducts.map(item => <button key={item.id} type="button" aria-current={!hideFeatureNavigation && item.id === productId ? 'page' : undefined} className={`drawer-product${!hideFeatureNavigation && item.id === productId ? ' active' : ''}`} onClick={() => navigateToProduct(item.href)}>
-              <span className="product-menu-icon">{item.id === 'satvic-fluid' ? <AudioLines size={19} /> : <Building2 size={19}/>}</span><span><b>{item.name}</b><small>{item.description}</small></span>
+              <span className="product-menu-icon"><AudioLines size={19} /></span><span><b>{item.name}</b><small>{item.description}</small></span>
             </button>)}
           </div>
           <button type="button" className="drawer-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)}>
@@ -261,7 +209,7 @@ export default function ProductDashboardShell({
         {featureRailCollapsed && <button type="button" className="rail-account feature-rail-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)} title={accountName}><span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span></button>}
       </aside>
 
-      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu"><button role="menuitem" onClick={() => {setAccountMenuOpen(false);onNotice('Account settings are ready for this workspace.')}}><Settings size={18} /><span>Settings</span></button><button type="button" role="menuitemcheckbox" aria-checked={false} className="account-product-toggle" onClick={toggleFounderOffice}><Building2 size={18} /><span>Founder Office</span><i className="account-toggle-track" aria-hidden="true"><i /></i></button><button type="button" role="menuitemcheckbox" aria-checked={satvicDashboardEnabled} aria-busy={satvicDashboardPreferenceLoading} disabled={satvicDashboardPreferenceLoading} className="account-product-toggle" onClick={toggleSatvicDashboard}><span className="satvic-dashboard-menu-mark"><img src="https://satvicmovement.org/images/favicon.png" alt="" /></span><span>Satvic Dashboard</span><i className={`account-toggle-track${satvicDashboardEnabled ? ' enabled' : ''}`} aria-hidden="true"><i /></i></button><form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={18} /><span>Logout</span></PendingSubmitButton></form></div>}
+      {accountMenuOpen && <div className="account-menu account-menu-rail" role="menu"><button role="menuitem" onClick={() => {setAccountMenuOpen(false);onNotice('Account settings are ready for this workspace.')}}><Settings size={18} /><span>Settings</span></button><form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={18} /><span>Logout</span></PendingSubmitButton></form></div>}
 
       <section className="main-area">
         <header className="topbar"><button className="icon-btn menu-trigger" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Menu size={19} /></button></header>

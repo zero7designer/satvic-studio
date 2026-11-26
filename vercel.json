@@ -6,7 +6,7 @@
       "schedule": "17 3 * * *"
     },
     {
-      "path": "/api/cron/founder-data-cleanup",
+      "path": "/api/cron/notifications-cleanup",
       "schedule": "37 3 * * *"
     }
   ]

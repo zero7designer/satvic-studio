@@ -16,7 +16,7 @@ const statusColors = {
   review: '#5950cc',
   failed: '#e9aaa5',
   processing: '#8b68b8',
-  ready: '#6e9b72',
+  ready: '#e6f1e5',
   neutral: neutralState,
 };
 

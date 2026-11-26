@@ -1,9 +1,9 @@
-export type ProductId = 'satvic-fluid' | 'founder-office';
+export type ProductId = 'satvic-fluid';
 
 export type ProductFeature = {
   id: string;
   label: string;
-  icon: 'plus' | 'workflow' | 'projects' | 'review' | 'languages' | 'book' | 'settings' | 'home' | 'focus' | 'decisions' | 'notes' | 'roadmap' | 'brain' | 'voice' | 'meeting' | 'people' | 'idea' | 'memory' | 'calculator';
+  icon: 'plus' | 'workflow' | 'calculator';
 };
 
 export type ProductDefinition = {
@@ -25,24 +25,6 @@ export const products: ProductDefinition[] = [
         { id: 'generate-sarvam', label: 'Generate with Sarvam', icon: 'plus' },
         { id: 'start-review', label: 'Start a review', icon: 'workflow' },
         { id: 'cost-estimate', label: 'Cost estimate', icon: 'calculator' },
-      ] },
-    ],
-  },
-  {
-    id: 'founder-office',
-    name: 'Founder Office',
-    description: 'Founder workspace',
-    href: '/dashboard/founder-office',
-    groups: [
-      { label: '', features: [
-        { id: 'overview', label: 'Overview', icon: 'home' },
-        { id: 'founder-mind', label: 'Founder Mind', icon: 'brain' },
-        { id: 'voice', label: 'Founder Voice', icon: 'voice' },
-        { id: 'meetings', label: 'Meetings & Discussions', icon: 'meeting' },
-        { id: 'people', label: 'People & Resources', icon: 'people' },
-        { id: 'ideas', label: 'Ideas & Opportunities', icon: 'idea' },
-        { id: 'projects', label: 'Project Execution', icon: 'workflow' },
-        { id: 'memory', label: 'Organisational Memory', icon: 'memory' },
       ] },
     ],
   },

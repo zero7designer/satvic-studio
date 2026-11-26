@@ -26,7 +26,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <form action={completeProfile} className="onboarding-form">
           <label htmlFor="fullName">Your name</label><input id="fullName" name="fullName" type="text" autoComplete="name" defaultValue={user.user_metadata?.full_name || user.user_metadata?.name || ''} placeholder="e.g. Piyush Yadav" minLength={2} maxLength={80} required />
           <AvatarPicker />
-          <label htmlFor="role">Your role</label><select id="role" name="role" defaultValue="" required><option value="" disabled>Select the closest role</option><option>Founder Office</option><option>Dubbing &amp; Localization</option><option>Content / QA Reviewer</option><option>Admin</option><option>Other</option></select>
+          <label htmlFor="role">Your role</label><select id="role" name="role" defaultValue="" required><option value="" disabled>Select the closest role</option><option>Dubbing &amp; Localization</option><option>Content / QA Reviewer</option><option>Admin</option><option>Other</option></select>
           <PendingSubmitButton className="landing-primary onboarding-submit" pendingText="Creating workspace…">Create my workspace <ArrowRight size={16} /></PendingSubmitButton>
         </form>
         <div className="auth-privacy"><ShieldCheck size={13} /> Signed in as {user.email || 'your Google account'}</div>

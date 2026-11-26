@@ -36,48 +36,14 @@ async function readRecord(bucket: string, userId: string) {
   }
 }
 
-async function readFounderWorkspace(bucket: string, userId: string) {
-  try {
-    const response = await getB2Client().send(new GetObjectCommand({ Bucket: bucket, Key: `founder-office-data/${userId}.json` }));
-    const bytes = await response.Body?.transformToByteArray();
-    if (!bytes || bytes.byteLength > 1_500_000) return null;
-    const stored = JSON.parse(gunzipSync(bytes, { maxOutputLength: 1_500_000 }).toString('utf8')) as { expiresAt?: string; data?: { jobs?: unknown } };
-    if (!stored.expiresAt || Date.parse(stored.expiresAt) <= Date.now()) return null;
-    return stored.data ?? null;
-  } catch (error) {
-    if ((error as { name?: string }).name === 'NoSuchKey' || (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return null;
-    throw error;
-  }
-}
-
-function founderNotices(jobs: unknown): Notice[] {
-  if (!Array.isArray(jobs)) return [];
-  const now = Date.now();
-  return jobs.flatMap((value: Record<string, unknown>) => {
-    if (!value || typeof value !== 'object' || typeof value.id !== 'string' || typeof value.title !== 'string') return [];
-    const feature = ['voice', 'meetings', 'people', 'ideas', 'projects', 'memory', 'overview'].includes(String(value.feature)) ? String(value.feature) : 'overview';
-    const href = `/dashboard/founder-office?feature=${encodeURIComponent(feature)}&jobId=${encodeURIComponent(value.id)}`;
-    if (value.status === 'captured') return [{ id: `founder:${value.id}:captured`, title: 'A job needs your attention', description: `${value.title} is waiting to be understood.`, kind: 'Founder Office', createdAt: new Date().toISOString(), href }];
-    if (value.status === 'done') return [{ id: `founder:${value.id}:done`, title: 'Founder Office job completed', description: `${value.title} is marked done.`, kind: 'Founder Office', createdAt: new Date().toISOString(), href }];
-    if (value.status === 'understood' || value.status === 'in-progress') {
-      const due = typeof value.due === 'string' ? Date.parse(value.due) : NaN;
-      if (Number.isFinite(due) && due - now <= 7 * 24 * 60 * 60 * 1000) {
-        return [{ id: `founder:${value.id}:deadline:${value.due}`, title: due < now ? 'A job is overdue' : 'A job deadline is approaching', description: `${value.title} - due ${value.due}.`, kind: 'Founder Office', createdAt: new Date().toISOString(), href }];
-      }
-    }
-    return [];
-  });
-}
-
 export async function GET() {
   const { supabase, user } = await getUser();
   if (!user) return Response.json({ error: 'Sign in to view notifications.' }, { status: 401 });
 
   try {
     const { bucket } = getB2Config();
-    const [{ data: jobs, error }, workspace, record] = await Promise.all([
+    const [{ data: jobs, error }, record] = await Promise.all([
       supabase.from('qa_jobs').select('id,run_id,project_name,status,issue_count,error_message,created_at,updated_at').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(100),
-      readFounderWorkspace(bucket, user.id),
       readRecord(bucket, user.id),
     ]);
     if (error) throw error;
@@ -96,7 +62,7 @@ export async function GET() {
       }];
     });
     const dismissed = new Set(record.dismissed);
-    const notifications = [...qaNotices, ...founderNotices(workspace?.jobs)].filter(item => !dismissed.has(item.id)).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 100);
+    const notifications = qaNotices.filter(item => !dismissed.has(item.id)).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 100);
     return Response.json({ notifications }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     console.error('[notifications] Could not load notifications:', error instanceof Error ? error.message : 'Unknown error');

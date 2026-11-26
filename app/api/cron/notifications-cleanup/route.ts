@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const client = getB2Client();
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const expired: { Key: string }[] = [];
-    for (const prefix of ['founder-office-data/', 'user-notifications/']) {
+    for (const prefix of ['user-notifications/']) {
       let continuationToken: string | undefined;
       do {
         const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken }));
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     }
     return Response.json({ deletedRecords: expired.length, retentionDays: 30 }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
-    console.error('[founder-data-cleanup] Could not remove expired records:', error instanceof Error ? error.message : 'Unknown storage error');
-    return Response.json({ error: 'Could not clean up expired Founder Office data.' }, { status: 500 });
+    console.error('[notifications-cleanup] Could not remove expired records:', error instanceof Error ? error.message : 'Unknown storage error');
+    return Response.json({ error: 'Could not clean up expired notification data.' }, { status: 500 });
   }
 }

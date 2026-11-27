@@ -174,7 +174,6 @@ async function detectWithDeepgram(audio: string, sourceLanguage: string): Promis
   endpoint.searchParams.set('language', language);
   endpoint.searchParams.set('diarize_model', 'latest');
   endpoint.searchParams.set('utterances', 'true');
-  endpoint.searchParams.set('punctuate', 'true');
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {

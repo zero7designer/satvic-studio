@@ -72,21 +72,48 @@ export function parseDeepgramDiarization(value: unknown): SpeakerDiarization {
     throw new Error('Deepgram returned no diarized speech turns.');
   }
 
-  const segments = value.results.utterances.map((utterance): Record<string, unknown> => {
-    if (!isRecord(utterance) || (typeof utterance.speaker !== 'number' && typeof utterance.speaker !== 'string')) {
-      throw new Error('Deepgram returned a speech turn without a speaker label.');
+  const segments: Record<string, unknown>[] = [];
+  for (const utterance of value.results.utterances) {
+    if (!isRecord(utterance)) throw new Error('Deepgram returned an invalid speech turn.');
+    if (Array.isArray(utterance.words) && utterance.words.length > 0) {
+      const wordSegments: { speakerId: string; startSeconds: unknown; endSeconds: unknown; text: string }[] = [];
+      for (const word of utterance.words) {
+        if (!isRecord(word) || (typeof word.speaker !== 'number' && typeof word.speaker !== 'string')) {
+          throw new Error('Deepgram returned a word without a speaker label.');
+        }
+        if ((typeof word.speaker === 'number' && (!Number.isSafeInteger(word.speaker) || word.speaker < 0))
+          || (typeof word.speaker === 'string' && !word.speaker.trim())) {
+          throw new Error('Deepgram returned an invalid speaker label.');
+        }
+        const speakerId = `speaker_${word.speaker}`;
+        const text = typeof word.punctuated_word === 'string' && word.punctuated_word.trim()
+          ? word.punctuated_word.trim()
+          : typeof word.word === 'string' ? word.word.trim() : '';
+        if (!text) throw new Error('Deepgram returned a word without text.');
+        const previous = wordSegments[wordSegments.length - 1];
+        if (previous?.speakerId === speakerId) {
+          previous.endSeconds = word.end;
+          previous.text = `${previous.text} ${text}`;
+        } else {
+          wordSegments.push({ speakerId, startSeconds: word.start, endSeconds: word.end, text });
+        }
+      }
+      segments.push(...wordSegments);
+      continue;
     }
-    if ((typeof utterance.speaker === 'number' && (!Number.isSafeInteger(utterance.speaker) || utterance.speaker < 0))
+
+    if ((typeof utterance.speaker !== 'number' && typeof utterance.speaker !== 'string')
+      || (typeof utterance.speaker === 'number' && (!Number.isSafeInteger(utterance.speaker) || utterance.speaker < 0))
       || (typeof utterance.speaker === 'string' && !utterance.speaker.trim())) {
-      throw new Error('Deepgram returned an invalid speaker label.');
+      throw new Error('Deepgram returned a speech turn without a valid speaker label.');
     }
-    return {
+    segments.push({
       speakerId: `speaker_${utterance.speaker}`,
       startSeconds: utterance.start,
       endSeconds: utterance.end,
       text: utterance.transcript,
-    };
-  });
+    });
+  }
 
   const parsed = parseSpeakerDiarization({ segments, note: '' });
   const arch = value.metadata.diarize_info.arch;

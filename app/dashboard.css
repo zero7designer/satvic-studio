@@ -2017,3 +2017,16 @@ body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d11
 .app-shell.product-satvic-fluid[data-mode=dark] .spotlight-status.in-progress{background:#302444!important;color:#d2a8ff!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .spotlight-status.failed{background:#3d2326!important;color:#ff7b72!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .report-disclaimer{color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid .speaker-provider-results{display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid #e5e5e1;border-radius:10px;background:#fafbf9}
+.app-shell.product-satvic-fluid .speaker-provider-results>p{margin:0;color:#6b7068;font-size:10px;line-height:1.5}
+.app-shell.product-satvic-fluid .speaker-provider-result{display:grid;grid-template-columns:1fr auto;align-items:center;gap:5px 10px;padding:8px;border:1px solid #e7e8e4;border-radius:8px;background:#fff}
+.app-shell.product-satvic-fluid .speaker-provider-result>b{color:#353832;font-size:11px}
+.app-shell.product-satvic-fluid .speaker-provider-result>.secondary-btn{grid-column:2;grid-row:1;padding:7px 10px;font-size:10px}
+.app-shell.product-satvic-fluid .speaker-provider-result>.secondary-btn[aria-pressed=true]{border-color:#6e8d70;background:#edf4ed;color:#365d39}
+.app-shell.product-satvic-fluid .speaker-provider-result>small{grid-column:1/-1;color:#747970;font-size:9px;line-height:1.45}
+.app-shell.product-satvic-fluid .speaker-cancel-button{width:100%;margin-top:9px;justify-content:center}
+.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-results{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-results>p,.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result>small{color:var(--studio-dark-muted)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result>b{color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result>.secondary-btn[aria-pressed=true]{border-color:var(--studio-accent)!important;background:#25382b!important;color:var(--studio-dark-text)!important}

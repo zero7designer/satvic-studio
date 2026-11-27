@@ -63,3 +63,35 @@ export function parseSpeakerDiarization(value: unknown): SpeakerDiarization {
     note: typeof value.note === 'string' ? value.note.trim().slice(0, 500) : '',
   };
 }
+
+export function parseDeepgramDiarization(value: unknown): SpeakerDiarization {
+  if (!isRecord(value) || !isRecord(value.metadata) || !isRecord(value.metadata.diarize_info)) {
+    throw new Error('Deepgram did not return confirmation that its diarizer ran.');
+  }
+  if (!isRecord(value.results) || !Array.isArray(value.results.utterances)) {
+    throw new Error('Deepgram returned no diarized speech turns.');
+  }
+
+  const segments = value.results.utterances.map((utterance): Record<string, unknown> => {
+    if (!isRecord(utterance) || (typeof utterance.speaker !== 'number' && typeof utterance.speaker !== 'string')) {
+      throw new Error('Deepgram returned a speech turn without a speaker label.');
+    }
+    if ((typeof utterance.speaker === 'number' && (!Number.isSafeInteger(utterance.speaker) || utterance.speaker < 0))
+      || (typeof utterance.speaker === 'string' && !utterance.speaker.trim())) {
+      throw new Error('Deepgram returned an invalid speaker label.');
+    }
+    return {
+      speakerId: `speaker_${utterance.speaker}`,
+      startSeconds: utterance.start,
+      endSeconds: utterance.end,
+      text: utterance.transcript,
+    };
+  });
+
+  const parsed = parseSpeakerDiarization({ segments, note: '' });
+  const arch = value.metadata.diarize_info.arch;
+  return {
+    ...parsed,
+    note: typeof arch === 'string' ? `Deepgram diarizer ${arch}.` : 'Deepgram speaker diarization completed.',
+  };
+}

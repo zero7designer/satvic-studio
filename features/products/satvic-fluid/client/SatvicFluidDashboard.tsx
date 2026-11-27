@@ -22,7 +22,9 @@ type ProjectFolder = { id: string; name: string; created_at: string; video_type:
 type TranscriptSegment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type AnalysisReport = { project: string; sourceLanguage: string; targetLanguage: string; createdAt: string; originalTranscript: string; dubbedTranscript: string; dubSubtitleTranscript?: string; dubSubtitleSegments?: TranscriptSegment[]; backTranslation: string; findings: Issue[]; disclaimer: string; originalSegments: TranscriptSegment[]; dubbedSegments: TranscriptSegment[]; timestampsAvailable: boolean; transcriptionEngine: string; semanticReviewEngine: string | null; transcriptCrossCheckAvailable: boolean; transcriptCrossCheckError?: string | null; audioReviewCompleted?: boolean; audioReviewEngine?: string; audioReviewFindingCount?: number; audioReviewChunkCount?: number; videoReviewCompleted?: boolean; videoReviewEngine?: string; videoReviewFindingCount?: number; transcriptReviewChunkCount?: number; reviewCoverageWarnings?: string[]; reviewComplete?: boolean; generatedBySarvam?: boolean; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; originalB2Key?: string | null; dubbedB2Key?: string | null; reportB2Key?: string | null };
 type Preflight = { fingerprint: string; geminiModel: string; cleanupNeeded: boolean; storage: { availableBytes: number; requiredBytes: number; cleanedBytes?: number }; limitations: string; durationSeconds?: number };
-type SpeakerDetection = { speakerCount: number; speakers: { id: string; firstSeenSeconds: number; turnCount: number }[]; segments: { speakerId: string; startSeconds: number; endSeconds: number; text: string }[]; note: string; model: string };
+type SpeakerProviderResult = { speakerCount: number; speakers: { id: string; firstSeenSeconds: number; turnCount: number }[]; segments: { speakerId: string; startSeconds: number; endSeconds: number; text: string }[]; note: string; model: string };
+type SpeakerProviderOutcome = { result: SpeakerProviderResult | null; error: string | null };
+type SpeakerDetection = { gemini: SpeakerProviderOutcome; deepgram: SpeakerProviderOutcome };
 
 const initialProjects: Project[] = [];
 const exampleProject: Project = { title: 'Hindi–Marathi', source: 'Hindi', target: 'Marathi', status: 'Example', issues: 0, date: 'Shared demo', color: 'lilac', initials: 'HI', isExample: true };
@@ -200,6 +202,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [speakerDetection, setSpeakerDetection] = useState<SpeakerDetection | null>(null);
   const [speakerDetectionAttempted, setSpeakerDetectionAttempted] = useState(false);
   const [speakerDetectionError, setSpeakerDetectionError] = useState('');
+  const [speakerCountSource, setSpeakerCountSource] = useState<'Gemini' | 'Deepgram' | 'Manual' | ''>('');
+  const [cancelingSpeakerCheck, setCancelingSpeakerCheck] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [dubbedFile, setDubbedFile] = useState<File | null>(null);
@@ -207,6 +211,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [latestReport, setLatestReport] = useState<AnalysisReport | null>(null);
   const [playingClip, setPlayingClip] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const speakerDetectionAbortRef = useRef<AbortController | null>(null);
+  const speakerCancellationRequestedRef = useRef(false);
   const [retryingQaJobId, setRetryingQaJobId] = useState<string | null>(null);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   const [preflight, setPreflight] = useState<Preflight | null>(null);
@@ -268,10 +274,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const continueWorkflowInProject = (folderId: string) => {
     setGenerationMode(isSarvamWorkflow ? 'sarvam' : 'existing');
     setSpeakerCount('');
+    setSpeakerCountSource('');
     setPreparedOriginalBlobUrl(null);
     setSpeakerDetection(null);
     setSpeakerDetectionAttempted(false);
     setSpeakerDetectionError('');
+    speakerCancellationRequestedRef.current = false;
     setPreflight(null);
     setProjectFolderId(folderId);
     setWorkflowProjectOpen(false);
@@ -906,6 +914,49 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     }
   }, [folders]);
 
+  async function closeNewProjectModal() {
+    if (cancelingSpeakerCheck) return;
+    if (preparedOriginalBlobUrl) {
+      speakerCancellationRequestedRef.current = true;
+      speakerDetectionAbortRef.current?.abort();
+      setCancelingSpeakerCheck(true);
+      try {
+        const response = await fetch('/api/jobs/speakers/cancel', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ originalBlobUrl: preparedOriginalBlobUrl }),
+        });
+        const body = await readApiJson(response);
+        if (!response.ok) throw new Error(body.error || 'Could not remove the temporary source upload.');
+      } catch (error) {
+        setNotice(error instanceof Error ? `Speaker check cancelled, but the temporary upload could not be deleted: ${error.message}` : 'Speaker check cancelled, but the temporary upload could not be deleted.');
+        return;
+      } finally {
+        setCancelingSpeakerCheck(false);
+      }
+      setNotice('Speaker check cancelled. The temporary source upload was deleted from Vercel Blob.');
+    }
+    setModal(false);
+    setOriginalFile(null);
+    setDubbedFile(null);
+    setPreflight(null);
+    setSpeakerCount('');
+    setSpeakerCountSource('');
+    setPreparedOriginalBlobUrl(null);
+    setSpeakerDetection(null);
+    setSpeakerDetectionAttempted(false);
+    setSpeakerDetectionError('');
+    speakerCancellationRequestedRef.current = false;
+  }
+
+  function chooseSpeakerEstimate(provider: 'Gemini' | 'Deepgram', result: SpeakerProviderResult) {
+    setSpeakerCount(String(result.speakerCount));
+    setSpeakerCountSource(provider);
+  }
+
+  const canCancelSpeakerCheck = Boolean(preparedOriginalBlobUrl)
+    && (!busy || /speaker|diariz/i.test(analysisProgress.stage));
+
   async function runAnalysis(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanProjectName = projectName.trim();
@@ -915,7 +966,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     const parsedSpeakerCount = Number(speakerCount);
     const validSpeakerCount = Number.isSafeInteger(parsedSpeakerCount) && parsedSpeakerCount >= 1;
     if (generationMode === 'sarvam' && speakerCount.trim() && !validSpeakerCount) { setNotice('Enter a whole number of speakers (at least 1).'); return; }
-    if (generationMode === 'sarvam' && speakerDetectionAttempted && !validSpeakerCount) { setNotice('Gemini could not provide a usable speaker count. Enter a whole number of speakers (at least 1).'); return; }
+    if (generationMode === 'sarvam' && speakerDetectionAttempted && !validSpeakerCount) { setNotice('Choose a Gemini or Deepgram result, or enter a whole number of speakers manually.'); return; }
     const fingerprint = `${generationMode}:${originalFile.name}:${originalFile.size}:${dubbedFile?.name || ''}:${dubbedFile?.size || 0}:${source}:${target}`;
     if (!preflight || preflight.fingerprint !== fingerprint) {
       setBusy(true);
@@ -978,28 +1029,35 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         }
         if (!sourceBlobUrl) throw new Error('The prepared source video is unavailable. Upload it again before continuing.');
         if (!speakerDetectionAttempted) {
-          setAnalysisProgress({ stage: 'Gemini detecting speakers in the source audio', percent: 38, status: 'processing', startedAt });
+          setAnalysisProgress({ stage: 'Gemini + Deepgram diarizing source audio', percent: 38, status: 'processing', startedAt });
+          const controller = new AbortController();
+          speakerDetectionAbortRef.current = controller;
+          speakerCancellationRequestedRef.current = false;
           try {
             const detectionResponse = await fetch('/api/jobs/speakers', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ originalBlobUrl: sourceBlobUrl }),
+              body: JSON.stringify({ originalBlobUrl: sourceBlobUrl, sourceLanguage: source }),
+              signal: controller.signal,
             });
             const detectionBody = await readApiJson(detectionResponse);
-            if (!detectionResponse.ok) throw new Error(detectionBody.error || 'Gemini could not detect speakers.');
+            if (!detectionResponse.ok) throw new Error(detectionBody.error || 'Speaker diarization could not be completed.');
             const result = detectionBody as SpeakerDetection;
             setSpeakerDetection(result);
             setSpeakerDetectionError('');
             setSpeakerDetectionAttempted(true);
-            if (!speakerCount.trim() && result.speakerCount > 0) setSpeakerCount(String(result.speakerCount));
-            setNotice(result.speakerCount > 0
-              ? `Gemini detected ${result.speakerCount} speaker${result.speakerCount === 1 ? '' : 's'}. Review or change the count before starting Sarvam.`
-              : 'Gemini could not identify a speaker count. Enter the count manually before starting Sarvam.');
+            const availableProviders = [result.gemini.result && 'Gemini', result.deepgram.result && 'Deepgram'].filter(Boolean);
+            setNotice(availableProviders.length
+              ? `${availableProviders.join(' and ')} diarization finished. Choose a result or enter the speaker count manually.`
+              : 'Neither provider returned a speaker result. Enter the speaker count manually.');
           } catch (error) {
+            if (speakerCancellationRequestedRef.current) return;
             const message = error instanceof Error ? error.message : 'Gemini speaker detection failed.';
             setSpeakerDetectionAttempted(true);
             setSpeakerDetectionError(message);
             throw error;
+          } finally {
+            if (speakerDetectionAbortRef.current === controller) speakerDetectionAbortRef.current = null;
           }
           return;
         }
@@ -1012,7 +1070,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         const project: Project = { title, source, target, status: 'In progress', issues: 0, date: 'Just now', createdAt: new Date().toISOString(), color: 'lilac', initials: title.slice(0, 2).toUpperCase(), jobId: startBody.runId, folderId: projectFolderId || undefined, workflowMode: 'sarvam', sourceDurationSeconds: measuredDurationSeconds || undefined };
         if (measuredDurationSeconds) updateCostDuration(project.jobId || title, (measuredDurationSeconds / 60).toFixed(2), projectFolderId || null);
         setProjects(previous => [project, ...previous]);
-        setModal(false); setOriginalFile(null); setDubbedFile(null); setProjectName(''); setSpeakerCount(''); setPreparedOriginalBlobUrl(null); setSpeakerDetection(null); setSpeakerDetectionAttempted(false); setSpeakerDetectionError('');
+        setModal(false); setOriginalFile(null); setDubbedFile(null); setProjectName(''); setSpeakerCount(''); setSpeakerCountSource(''); setPreparedOriginalBlobUrl(null); setSpeakerDetection(null); setSpeakerDetectionAttempted(false); setSpeakerDetectionError('');
         const backgroundLocation = startBody.runsOnVercel
           ? 'The job runs on Vercel, so you can close this browser or turn off your computer.'
           : 'This is a local run, so keep this computer and the development server running.';
@@ -1550,20 +1608,46 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         <details className="cost-rate-details" open={!costEstimateSelectedFolderId}><summary><Calculator size={14}/> Technologies and estimate assumptions</summary><div className="cost-rate-grid"><label><span>Sarvam dubbing · ₹/min</span><input type="number" min="0" step="0.1" value={costRates.dubbingPerMinute} onChange={event=>setCostRates(current=>({...current,dubbingPerMinute:Number(event.target.value)}))}/></label><label><span>Saaras v4 · ₹/track min</span><input type="number" min="0" step="0.01" value={costRates.speechToTextPerMinute} onChange={event=>setCostRates(current=>({...current,speechToTextPerMinute:Number(event.target.value)}))}/></label><label><span>Gemini input · $/1M tokens</span><input type="number" min="0" step="0.01" value={costRates.geminiInputUsdPerMillion} onChange={event=>setCostRates(current=>({...current,geminiInputUsdPerMillion:Number(event.target.value)}))}/></label><label><span>Gemini output · $/1M tokens</span><input type="number" min="0" step="0.01" value={costRates.geminiOutputUsdPerMillion} onChange={event=>setCostRates(current=>({...current,geminiOutputUsdPerMillion:Number(event.target.value)}))}/></label></div><div className="cost-tech-list"><span><b>Sarvam Dubbing API</b> · dubbing jobs, source duration billed; `editor_flow: false`.</span><span><b>Sarvam Saaras v4</b> · timestamped transcription for both tracks after generated dubs and for both tracks in existing-dub reviews; each track is billed.</span><span><b>Gemini {preflight?.geminiModel || '3.8 Flash'}</b> · transcript comparison and audio listening, estimated from input/output tokens per minute.</span><span><b>FFmpeg, Vercel Workflows, Blob, and Supabase</b> · hosting, processing, transfer, and storage charges are not included.</span></div><p className="cost-rate-note">Rates are estimates and may differ from your provider plan. Sarvam is shown in INR, Gemini in USD. Gemini transcript translation is included in its estimate. Actual token and character usage varies. Excludes GST.</p><div className="cost-source-links"><a href="https://docs.sarvam.ai/api/getting-started/pricing" target="_blank" rel="noreferrer">Sarvam pricing</a><a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noreferrer">Gemini pricing</a></div></details><footer className="cost-estimate-footer"><span>Video estimates are saved in this browser for each project folder.</span><button type="button" onClick={closeCostEstimator}>Done</button></footer></section></div>}
       {notice && <div className="toast"><Check size={16}/><span>{notice}</span><button onClick={()=>setNotice('')} aria-label="Dismiss"><X size={15}/></button></div>}
 
-      {modal && <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy){setModal(false);setOriginalFile(null);setDubbedFile(null);setPreflight(null)}}}><form className="create-modal" onSubmit={runAnalysis}>
-        <button type="button" className="modal-close icon-btn" onClick={()=>{if(!busy){setModal(false);setOriginalFile(null);setDubbedFile(null);setPreflight(null)}}} aria-label="Close"><X size={18}/></button><div className="section-kicker">SARVAM DUBBING + AI QUALITY REVIEW</div><h2>{generationMode === 'sarvam' ? 'Generate a dub with Sarvam' : 'Review an existing dub'}</h2>
+      {modal && <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&(!busy||canCancelSpeakerCheck))void closeNewProjectModal()}}><form className="create-modal" onSubmit={runAnalysis}>
+        <button type="button" className="modal-close icon-btn" onClick={()=>{if(!busy||canCancelSpeakerCheck)void closeNewProjectModal()}} disabled={cancelingSpeakerCheck} aria-label="Close"><X size={18}/></button><div className="section-kicker">SARVAM DUBBING + AI QUALITY REVIEW</div><h2>{generationMode === 'sarvam' ? 'Generate a dub with Sarvam' : 'Review an existing dub'}</h2>
         <p className="modal-intro">{generationMode === 'sarvam' ? 'Upload your source video and choose the language for the Sarvam dub.' : 'Upload the original video and the dubbed version you want to review.'}</p>
 
         <label className="field-label">Video name <span>AUTOMATIC</span><input className="text-input" value={projectName} readOnly aria-readonly="true" /></label>
         <label className="field-label">Save in folder<select value={projectFolderId} onChange={event=>setProjectFolderId(event.target.value)}><option value="">No folder</option>{folders.map(folder=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
-        <div className="language-fields"><label className="field-label">Source language<select value={source} onChange={e=>{setSource(e.target.value);setProjectName(`${e.target.value} to ${target}`)}}>{['Hindi','English','Marathi','Bengali','Gujarati','Tamil','Telugu','Kannada','Punjabi','Malayalam','Odia','Assamese','Urdu','Sanskrit','Nepali'].map(language=><option key={language}>{language}</option>)}</select></label><label className="field-label">Target language<select value={target} onChange={e=>{setTarget(e.target.value);setProjectName(`${source} to ${e.target.value}`)}}>{languages.map(language=><option key={language}>{language}</option>)}</select></label></div>
-        {generationMode === 'sarvam' && <div className="field-label"><label htmlFor="speaker-count">Number of speakers in the source audio</label><input id="speaker-count" className="text-input" type="number" min="1" step="1" inputMode="numeric" value={speakerCount} onChange={event=>setSpeakerCount(event.target.value)} placeholder="For example, 2"/>{speakerDetection ? <small role="status">Gemini labeled {speakerDetection.segments.length} speech turns as {speakerDetection.speakerCount} distinct speaker{speakerDetection.speakerCount === 1 ? '' : 's'}{speakerDetection.speakers.length ? `: ${speakerDetection.speakers.map(speaker=>`${speaker.id} (${speaker.turnCount} turns, first at ${formatTime(speaker.firstSeenSeconds)})`).join('; ')}` : ''}. Review or change the count before continuing.{speakerDetection.note ? ` ${speakerDetection.note}` : ''}</small> : speakerDetectionError ? <small role="alert">Gemini detection failed: {speakerDetectionError} Enter the number manually; the next step will use your count.</small> : <small>Gemini will label individual speech turns, then count the distinct voice labels. You can edit its result or enter the count yourself.</small>}</div>}
+        <div className="language-fields"><label className="field-label">Source language<select value={source} disabled={busy} onChange={e=>{setSource(e.target.value);setProjectName(`${e.target.value} to ${target}`);if(preparedOriginalBlobUrl){setSpeakerCount('');setSpeakerCountSource('');setSpeakerDetection(null);setSpeakerDetectionAttempted(false);setSpeakerDetectionError('')}}}>{['Hindi','English','Marathi','Bengali','Gujarati','Tamil','Telugu','Kannada','Punjabi','Malayalam','Odia','Assamese','Urdu','Sanskrit','Nepali'].map(language=><option key={language}>{language}</option>)}</select></label><label className="field-label">Target language<select value={target} disabled={busy} onChange={e=>{setTarget(e.target.value);setProjectName(`${source} to ${e.target.value}`)}}>{languages.map(language=><option key={language}>{language}</option>)}</select></label></div>
+        {generationMode === 'sarvam' && <div className="field-label">
+          <label htmlFor="speaker-count">Number of speakers in the source audio</label>
+          <input id="speaker-count" className="text-input" type="number" min="1" step="1" inputMode="numeric" value={speakerCount} onChange={event=>{setSpeakerCount(event.target.value);setSpeakerCountSource(event.target.value ? 'Manual' : '')}} placeholder="For example, 2"/>
+          {speakerDetection && <>
+            <div className="speaker-provider-results" role="group" aria-label="Choose a speaker-count result">
+              <p>These are provider estimates, not ground truth. Choose one or enter the count manually; your selection is sent to Sarvam.</p>
+              {(['Gemini', 'Deepgram'] as const).map(provider => {
+                const outcome = provider === 'Gemini' ? speakerDetection.gemini : speakerDetection.deepgram;
+                const result = outcome.result;
+                return <section key={provider} className="speaker-provider-result">
+                  <b>{provider}</b>
+                  {result ? <>
+                    {result.speakerCount > 0
+                      ? <button type="button" className="secondary-btn" aria-pressed={speakerCountSource === provider} onClick={()=>chooseSpeakerEstimate(provider, result)}>
+                        Use {provider}: {result.speakerCount} speaker{result.speakerCount === 1 ? '' : 's'}
+                      </button>
+                      : <small role="status">No speech turns were detected; this result cannot be selected.</small>}
+                    <small>{result.segments.length} labeled speech turns · {result.model}{result.speakers.length ? ` · ${result.speakers.map(speaker=>`${speaker.id}: ${speaker.turnCount} turns, first at ${formatTime(speaker.firstSeenSeconds)}`).join('; ')}` : ''}{result.note ? ` · ${result.note}` : ''}</small>
+                  </> : <small role="status">{outcome.error || 'No result returned.'}</small>}
+                </section>;
+              })}
+            </div>
+            {speakerCountSource && <small role="status">Selected: {speakerCountSource}{speakerCount ? ` · ${speakerCount} speakers` : ''}. You can still edit the count above.</small>}
+          </>}
+          {speakerDetectionError && <small role="alert">Both provider checks could not complete: {speakerDetectionError} Enter the number manually; the next step will use your count.</small>}
+          {!speakerDetection && !speakerDetectionError && <small>Gemini and Deepgram will independently label speech turns. Choose either result or enter the count yourself.</small>}
+        </div>}
         <div className="video-upload-grid">
           <label className="upload-box">
-            <input type="file" accept="video/*,audio/*" onChange={e=>{setOriginalFile(e.target.files?.[0] ?? null);setPreflight(null);setSpeakerCount('');setPreparedOriginalBlobUrl(null);setSpeakerDetection(null);setSpeakerDetectionAttempted(false);setSpeakerDetectionError('')}}/>
+            <input type="file" accept="video/*,audio/*" disabled={busy || Boolean(preparedOriginalBlobUrl)} onChange={e=>{setOriginalFile(e.target.files?.[0] ?? null);setPreflight(null);setSpeakerCount('');setSpeakerCountSource('');setSpeakerDetection(null);setSpeakerDetectionAttempted(false);setSpeakerDetectionError('')}}/>
             <span className="upload-icon"><Upload size={19}/></span>
             <b>{originalFile?.name || 'Choose original video'}</b>
-            <small>{originalFile ? `${(originalFile.size/1024/1024).toFixed(1)} MB · selected, not uploaded` : 'Source language audio/video'}</small>
+            <small>{preparedOriginalBlobUrl ? 'Uploaded privately · cancel and delete it before choosing another source' : originalFile ? `${(originalFile.size/1024/1024).toFixed(1)} MB · selected, not uploaded` : 'Source language audio/video'}</small>
             <span className="upload-formats"><FileAudio size={12}/> MP4, MOV, MP3, WAV</span>
           </label>
           {generationMode==='existing' && <label className="upload-box">
@@ -1574,10 +1658,11 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             <span className="upload-formats"><FileAudio size={12}/> MP4, MOV, MP3, WAV</span>
           </label>}
         </div>
-        <div className="privacy-note"><ShieldCheck size={15}/><span>{generationMode==='sarvam' ? 'Before dubbing, Gemini estimates distinct voices in the source audio. Review or edit its speaker count; the confirmed number is sent to Sarvam. Then Saaras transcribes both tracks, Gemini checks the dub, and a local scan flags long freezes and black screens.' : 'Sarvam Saaras transcribes both tracks. Gemini compares their meaning and listens for audible speech and audio-quality issues. A local scan also flags long freezes and black screens in the dub.'}</span></div>
+        <div className="privacy-note"><ShieldCheck size={15}/><span>{generationMode==='sarvam' ? 'Before dubbing, Gemini and Deepgram independently analyze the source audio for speaker turns. Their estimates can be wrong: choose either result or enter the count manually. The selected count is sent to Sarvam. Extracted audio is sent to both providers and Deepgram usage may be billable. Canceling deletes the temporary source from Vercel Blob; provider work already accepted may continue. Then Saaras transcribes both tracks, Gemini checks the dub, and a local scan flags long freezes and black screens.' : 'Sarvam Saaras transcribes both tracks. Gemini compares their meaning and listens for audible speech and audio-quality issues. A local scan also flags long freezes and black screens in the dub.'}</span></div>
         {preflight && <div className="preflight-card" role="status"><b>Preflight passed · {preflight.geminiModel} and storage checked</b><span>{generationMode === 'sarvam' && speakerDetectionAttempted ? 'The source has been uploaded privately. Review or correct the speaker count, then confirm to start Sarvam.' : 'Your media has not been uploaded or sent to Sarvam yet. Confirm below to continue.'}</span><span>Estimated Blob space needed: {(preflight.storage.requiredBytes/1024/1024).toFixed(1)} MB including reserve. Available: {(preflight.storage.availableBytes/1024/1024).toFixed(1)} MB.</span>{preflight.cleanupNeeded ? <span className="preflight-warning">To make room, confirmation will delete inactive video/audio files from earlier jobs. Reports and active jobs are kept; old video playback/download links will stop working.</span> : preparedOriginalBlobUrl ? <span>Storage preparation is complete; no further cleanup is needed.</span> : <span>No old media needs to be cleared.</span>}<small>{preflight.limitations} This check uses a small Gemini request; Sarvam credits are not checked or reserved. Check Sarvam Dashboard → Billing before confirming.</small></div>}
         {busy && !checkingReadiness && <div className="analysis-progress" role="status" aria-live="polite"><div className="progress-heading"><b>{analysisProgress.stage || 'Preparing your analysis'}</b><span>{Math.min(100, analysisProgress.percent)}%</span></div><div className="progress-track" role="progressbar" aria-label="Analysis progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={analysisProgress.percent}><span style={{width: `${analysisProgress.percent}%`}} /></div><div className="progress-meta"><span>Elapsed {formatDuration(elapsedSeconds)}</span><b>{remainingEstimate(estimatedRange, elapsedSeconds)}</b></div><small>Time is an estimate; Sarvam dubbing, Saaras transcription, and Gemini review can take several minutes.</small></div>}
-        <button className="primary-btn modal-submit" type="submit" disabled={busy}>{busy?<><span className="spinner"/> {checkingReadiness?'Checking providers…':analysisProgress.stage?.toLowerCase().includes('storage')?'Checking storage…':generationMode==='sarvam'&&analysisProgress.percent<74?'Preparing / generating dub…':'AI listening & comparing…'}</>:<>{preflight ? generationMode === 'sarvam' && !speakerDetectionAttempted ? (preflight.cleanupNeeded && !preparedOriginalBlobUrl ? 'Clear old media & detect speakers' : 'Upload & detect speakers') : generationMode === 'sarvam' && speakerDetectionError ? 'Use manual count & start Sarvam' : preflight.cleanupNeeded && !preparedOriginalBlobUrl ? 'Clear old media & start' : generationMode === 'sarvam' ? `Confirm ${speakerCount || 'speaker'} & start Sarvam` : 'Confirm & start job' : 'Check readiness first'} <ArrowRight size={15}/></>}</button>
+        {canCancelSpeakerCheck && <button type="button" className="secondary-btn speaker-cancel-button" onClick={()=>void closeNewProjectModal()} disabled={cancelingSpeakerCheck}>{cancelingSpeakerCheck ? 'Cancelling and deleting temporary upload…' : 'Cancel speaker check and delete upload'}</button>}
+        <button className="primary-btn modal-submit" type="submit" disabled={busy}>{busy?<><span className="spinner"/> {checkingReadiness?'Checking providers…':analysisProgress.stage?.toLowerCase().includes('storage')?'Checking storage…':/speaker|diariz/i.test(analysisProgress.stage)?'Checking speakers…':generationMode==='sarvam'&&analysisProgress.percent<74?'Preparing / generating dub…':'AI listening & comparing…'}</>:<>{preflight ? generationMode === 'sarvam' && !speakerDetectionAttempted ? (preflight.cleanupNeeded && !preparedOriginalBlobUrl ? 'Clear old media & detect speakers' : 'Upload & detect speakers') : generationMode === 'sarvam' && speakerDetectionError ? 'Use manual count & start Sarvam' : preflight.cleanupNeeded && !preparedOriginalBlobUrl ? 'Clear old media & start' : generationMode === 'sarvam' ? `Confirm ${speakerCount || 'speaker'} & start Sarvam` : 'Confirm & start job' : 'Check readiness first'} <ArrowRight size={15}/></>}</button>
       </form></div>}      {details && <div className={reportPage ? "report-page-backdrop" : "modal-backdrop"} onMouseDown={e=>{if(!reportPage&&e.target===e.currentTarget){setDetails(null);setReportPage(false)}}}><div className={reportPage ? "report-page-content detail-modal" : "detail-modal"}>{reportPage && <button type="button" className="report-back-button" onClick={()=>{setReportPage(false);setReportDeleteConfirmOpen(false);setDetails(null)}}><ArrowLeft size={16}/> Back to projects</button>}<button className="modal-close icon-btn" onClick={()=>{setDetails(null);setReportPage(false)}} aria-label="Close"><X size={18}/></button><div className="detail-topline"><span className="eyebrow-line"/> DUB VIDEO QA REPORT <span className={`status-pill${details.status==='Failed' ? ' failed' : (report && (report.findings.length > 0 || report.reviewComplete !== true)) ? ' needs-review' : ' ready'}`}><i/>{details.status==='Failed' ? 'Failed' : report ? report.reviewComplete !== true ? 'Review incomplete' : report.findings.length ? `${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'}` : 'Ready' : (details.isExample ? 'Example' : 'Loading report')}</span><div className="archive-actions">{reportPage && !details.isExample && <div className="report-delete-control">{reportDeleteConfirmOpen ? <div className="report-delete-confirm" role="group" aria-label="Confirm project deletion"><span>Delete this project and its saved files?</span><button type="button" onClick={()=>setReportDeleteConfirmOpen(false)} disabled={deletingProjectId===details.jobId}>Cancel</button><button type="button" className="report-delete-confirm-action" onClick={()=>void deleteProject(details)} disabled={deletingProjectId===details.jobId}>{deletingProjectId===details.jobId?"Deleting…":"Delete permanently"}</button></div> : <button type="button" className="report-delete-button" onClick={()=>setReportDeleteConfirmOpen(true)}><Trash2 size={14}/>Delete project</button>}</div>}<button type="button" className="icon-btn" aria-label="Dub output actions" aria-expanded={archiveMenuOpen} onClick={()=>setArchiveMenuOpen(open=>!open)}><MoreHorizontal size={18}/></button>{archiveMenuOpen && <div className="archive-dropdown"><button type="button" onClick={()=>{setRenameProjectValue(details.title);setRenameProjectOpen(true);setArchiveMenuOpen(false)}}><Pencil size={14}/>Rename project</button>{report?.dubbedVideoUrl && <button type="button" onClick={archiveFullReportToB2} disabled={archiveBusy}><ExternalLink size={14}/>{archiveBusy ? 'Saving full report...' : report?.reportB2Key ? 'Ensure Backblaze B2 archive & clear Vercel' : b2Configured ? 'Archive full report to Backblaze B2 & clear Vercel' : 'Archive full report to Backblaze B2'}</button>}{!report?.dubbedVideoUrl && <span>No dubbed output is available.</span>}</div>}</div></div>{renameProjectOpen ? <form className="rename-project-form" onSubmit={saveProjectName}><label><span>Project name</span><input value={renameProjectValue} onChange={event=>setRenameProjectValue(event.target.value)} maxLength={120} required autoFocus /></label><div><button type="submit" disabled={renameProjectBusy}>{renameProjectBusy ? 'Saving…' : 'Save name'}</button><button type="button" onClick={()=>setRenameProjectOpen(false)} disabled={renameProjectBusy}>Cancel</button></div></form> : <h2>{details.title}</h2>}<p className="detail-language">{details.source} source <ArrowRight size={14}/> {details.target} dub <span>·</span> {details.date}</p>{details.status!=='Failed' && <div className="detail-explain">{details.isExample ? <span>This shared, read-only sample previews the project list. No customer video or report is attached.</span> : <span>{audioReviewSummary}</span>}</div>}<div className="detail-section-title"><b>{details.status==='Failed'?'Job failed':details.isExample ? 'Example preview' : 'Automated findings'}</b><span>{details.status==='Failed'?details.isExample ? 'No report attached' : 'QA report unavailable':`${report?.findings.length ?? 0} flags`}</span></div>{details.status==='Failed' && <div className="job-failure" role="alert"><AlertCircle size={18}/><div><b>{details.dubbedVideoUrl ? 'QA did not finish, but your dub is safe' : 'The dubbing job did not complete'}</b><p>{details.errorMessage || 'Open the project to load the failure details.'}</p></div></div>}{details.status==='Failed' && (details.originalVideoUrl || details.dubbedVideoUrl) && <div className="failed-dub-available"><div><b>Your original and saved dub are available</b><p>QA failed, but you can still watch and download the videos.</p></div><div className="failed-video-grid">{details.originalVideoUrl && <section><b>Original &middot; {details.source}</b><video controls preload="metadata" src={details.originalVideoUrl}/><a className="secondary-btn" href={details.originalVideoUrl} download={`${details.title.replace(/[^\w-]+/g, '-')}-${details.source.toLowerCase()}-original.mp4`}><ArrowDownToLine size={15}/> Download original</a></section>}{details.dubbedVideoUrl && <section><b>Sarvam dub &middot; {details.target}</b><video controls preload="metadata" src={details.dubbedVideoUrl}/><a className="secondary-btn" href={details.dubbedVideoUrl} download={`${details.title.replace(/[^\w-]+/g, '-')}-${details.target.toLowerCase()}-dub.mp4`}><ArrowDownToLine size={15}/> Download Sarvam dub</a></section>}</div></div>}{(report?.findings ?? []).map((issue,index)=><div className="detail-issue" key={`${issue.title}-${index}`}><div className={cx('severity-mark',issue.severity)}>{issue.severity==='critical'?<Zap size={14}/>:<Activity size={14}/>}</div><div><b>{issue.title}</b><p>{findingDetail(issue)}</p>{(issue.sourceQuote || issue.dubQuote) && <div className="finding-phrases">{issue.sourceQuote && <span><b>Source phrase</b> {issue.sourceQuote}</span>}{issue.dubQuote && <span><b>{issue.evidenceStatus === 'transcript-only' ? (report?.transcriptionEngine.includes('Sarvam dubbing SRT export') ? 'Dub SRT phrase' : 'Dub transcript phrase') : 'Dub phrase heard'}</b> {issue.dubQuote}</span>}{issue.backTranslationQuote && <span><b>Gemini back-translation</b> {issue.backTranslationQuote}</span>}</div>}<small>{issue.category ?? issue.source ?? 'Transcript check'}{issue.source && issue.category ? ` | ${issue.source === 'Transcript checks' || issue.source === 'Gemini transcript cross-check' ? 'Transcript comparison' : issue.source === 'Gemini audio review' ? 'Audio review' : issue.source}` : ''}{issue.evidenceStatus ? ` · ${issue.evidenceStatus === 'cross-checked' ? 'audio and transcript checks found this' : issue.evidenceStatus === 'audio-only' ? 'flagged while listening to the audio' : issue.evidenceStatus === 'visual-only' ? 'possible video issue from local frame scan; check the dub clip' : 'transcript check only · listen to confirm'}` : ''}</small>{(findingTimeRange(issue,report?.originalSegments ?? [],'source').start!==undefined || findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!==undefined) && <div className="finding-time-links">{findingTimeRange(issue,report?.originalSegments ?? [],'source').start!==undefined && <button title="Plays from 10 seconds before to 10 seconds after this finding" aria-label={playingClip === clipKey('source-review-video',findingTimeRange(issue,report?.originalSegments ?? [],'source').start!,findingTimeRange(issue,report?.originalSegments ?? [],'source').end) ? 'Pause source clip' : 'Play source clip'} onClick={()=>playSegment('source-review-video',findingTimeRange(issue,report?.originalSegments ?? [],'source').start!,findingTimeRange(issue,report?.originalSegments ?? [],'source').end,true)}>Source {issue.evidenceStatus === 'transcript-only' ? '~' : ''}{formatTime(findingTimeRange(issue,report?.originalSegments ?? [],'source').start!)}{issue.sourceEnd!==undefined ? `–${formatTime(findingTimeRange(issue,report?.originalSegments ?? [],'source').end!)}` : ''} {playingClip === clipKey('source-review-video',findingTimeRange(issue,report?.originalSegments ?? [],'source').start!,findingTimeRange(issue,report?.originalSegments ?? [],'source').end) ? <Pause size={11}/> : <Play size={11}/>}</button>}{findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!==undefined && <button title="Plays from 10 seconds before to 10 seconds after this finding" aria-label={playingClip === clipKey('dub-review-video',findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!,findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').end) ? 'Pause dub clip' : 'Play dub clip'} onClick={()=>playSegment('dub-review-video',findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!,findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').end,true)}>Dub {issue.evidenceStatus === 'transcript-only' ? '~' : ''}{formatTime(findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!)}{issue.dubEnd!==undefined ? `–${formatTime(findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').end!)}` : ''} {playingClip === clipKey('dub-review-video',findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').start!,findingTimeRange(issue,report?.dubbedSegments ?? [],'dub').end) ? <Pause size={11}/> : <Play size={11}/>}</button>}</div>}</div></div>)}{report && <><div className="audio-review-grid"><label><b>Original · {report.sourceLanguage}</b><video id="source-review-video" controls preload="metadata" src={report.originalVideoUrl ?? undefined} onPause={()=>setPlayingClip(null)} /></label>{report.dubbedVideoUrl ? <label><b>Dub &middot; {report.targetLanguage}</b><video id="dub-review-video" controls preload="metadata" src={report.dubbedVideoUrl ?? undefined} onPause={()=>setPlayingClip(null)} /></label> : <p className="no-timestamps">Dub media is no longer available.</p>}</div><details className="transcript-details"><summary>Show transcript evidence (supporting evidence, not the verdict)</summary><div className="transcript-results"><div><b>Original audio transcript · {report.sourceLanguage}</b><p>{report.originalTranscript}</p></div><div><b>{report?.transcriptionEngine.includes('Sarvam dubbing SRT export') ? `Sarvam dub SRT script · ${report.targetLanguage}` : `Dub audio transcript · ${report.targetLanguage}`}</b><p>{report.dubbedTranscript}</p></div>{report.dubSubtitleTranscript && report.dubSubtitleTranscript !== report.dubbedTranscript && <div><b>Sarvam dub script · {report.targetLanguage}</b><p>{report.dubSubtitleTranscript}</p></div>}{report.backTranslation && <div><b>{report?.transcriptionEngine.includes('Sarvam dubbing SRT export') ? `Gemini back-translation of Sarvam dub SRT to ${report.sourceLanguage}` : `Gemini back-translation of dub transcript to ${report.sourceLanguage}`} (supporting comparison)</b><p>{report.backTranslation}</p></div>}</div></details></>}<div className="detail-actions">{report?.generatedBySarvam && report.dubbedVideoUrl && <a className="secondary-btn" href={report.dubbedVideoUrl} download={`${report.project.replace(/[^\w-]+/g, "-")}-${report.targetLanguage.toLowerCase()}-dub.mp4`}><ArrowDownToLine size={15}/> Download Sarvam dub</a>}{report?.dubbedVideoUrl && <button className="secondary-btn" onClick={archiveFullReportToB2} disabled={archiveBusy}><ExternalLink size={15}/>{archiveBusy ? 'Saving to Backblaze B2...' : report?.reportB2Key ? 'Ensure Backblaze B2 archive & clear Vercel' : b2Configured ? 'Archive full report to Backblaze B2' : 'Archive full report to Backblaze B2'}</button>}<button className="secondary-btn" onClick={exportReport}><ArrowDownToLine size={15}/> Export JSON report</button>{(details.status==='Failed' && (details.dubbedAvailable || details.dubbedVideoUrl || /QA request timed out|QA failed|QA returned/i.test(details.errorMessage || '')) ) && <button className="primary-btn" onClick={()=>void retrySavedDubQa(details)} disabled={retryingQaJobId===details.jobId}>{retryingQaJobId===details.jobId ? <><LoaderCircle className="spin" size={15}/> Starting QA retry...</> : <><Activity size={15}/>Retry QA with saved dub</>}</button>}{report?.generatedBySarvam && report.dubbedVideoUrl && details.status!=='Failed' && details.status!=='In progress' && <button className="primary-btn" onClick={()=>void retrySavedDubQa(details)} disabled={retryingQaJobId===details.jobId}><Activity size={15}/>Run QA again</button>}<button className="primary-btn" onClick={()=>{setDetails(null);setReportPage(false)}}><Check size={15}/> Done</button></div></div></div>}
     </ProductDashboardShell>
   );

@@ -25,6 +25,7 @@ SARVAM_API_KEY=your_key_here
 GEMINI_API_KEY=your_gemini_key
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
+DEEPGRAM_API_KEY=your_deepgram_api_key
 # Optional: set this to a full Flash model available to your key for the text-only transcript comparison.
 # GEMINI_TRANSCRIPT_REVIEW_MODEL=your-supported-flash-model-id
 GMAIL_USER=piyushkumaryadav2027@gmail.com
@@ -116,7 +117,9 @@ Research references: [Sarvam Saaras transcription](https://docs.sarvam.ai/api-re
 
 In **Generate with Sarvam** mode, the browser uploads the source to private Vercel Blob storage and starts a Vercel Workflow. Sarvam creates the dub, then the workflow calls the QA API on Vercel. Supabase stores the job history, and Blob stores the media and QA report. The browser can close while the generated dubbing workflow runs; email alerts are sent when it starts and when it completes or fails.
 
-For the deployed app, connect a Vercel Blob store and configure `BLOB_READ_WRITE_TOKEN`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `WORKFLOW_INTERNAL_TOKEN`. Production workflow callbacks, Google sign-in, and email links use `https://satvic-studio.vercel.app`. Keep secret values server-side. If deployment protection is enabled, configure `VERCEL_AUTOMATION_BYPASS_SECRET` for the workflow callback.
+Before Sarvam starts, the app sends extracted source audio to Gemini and Deepgram Nova-3 for independent speaker diarization. The user must choose one provider's result or enter a count manually; the chosen count is passed to Sarvam. Provider estimates are not guaranteed to match the actual speakers. Deepgram usage can incur charges under your Deepgram account ([pricing](https://deepgram.com/pricing)), and both providers receive the extracted audio. Canceling the speaker check aborts the browser request and deletes the temporary source from Vercel Blob; if deletion fails, the app keeps the modal open and reports the error so deletion can be retried. A provider request already received by Gemini or Deepgram may continue processing after cancellation.
+
+For the deployed app, connect a Vercel Blob store and configure `BLOB_READ_WRITE_TOKEN`, `SARVAM_API_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `DEEPGRAM_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `WORKFLOW_INTERNAL_TOKEN`. Production workflow callbacks, Google sign-in, and email links use `https://satvic-studio.vercel.app`. Keep secret values server-side. If deployment protection is enabled, configure `VERCEL_AUTOMATION_BYPASS_SECRET` for the workflow callback.
 
 For Gmail email alerts, configure `GMAIL_USER=piyushkumaryadav2027@gmail.com` and `GMAIL_APP_PASSWORD` in Vercel. The sender is this Gmail account, and each job's start, completion, or failure notices go to the email address of the user signed into Satvic Studio. To create the app password, first enable 2-Step Verification on that Google account, then create an App Password in its Google Account security settings. Use that generated app password, not the regular Google password. Google may not offer App Passwords for some account configurations; see [Google's App Password requirements](https://support.google.com/mail/answer/185833). Add the same two values in `.env.local` for local testing. Keep the app password private and redeploy Vercel after adding it. Standard Gmail accounts have a daily sending limit, so this is suitable for low-volume job notifications rather than bulk email; see [Gmail sending limits](https://support.google.com/mail/answer/22839).
 

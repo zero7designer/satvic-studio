@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createClient } from '../../../../lib/supabase/server';
-import { parseSpeakerDiarization } from '../../../../lib/qa/speaker-diarization';
+import { parseDeepgramDiarization, parseSpeakerDiarization, type SpeakerDiarization } from '../../../../lib/qa/speaker-diarization';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -37,6 +37,29 @@ const speakerSchema = {
   required: ['segments', 'note'],
 };
 
+const deepgramLanguageCodes: Record<string, string> = {
+  English: 'en-IN',
+  Hindi: 'hi',
+  Bengali: 'bn',
+  Gujarati: 'gu',
+  Kannada: 'kn',
+  Marathi: 'mr',
+  Malayalam: 'ml',
+  Odia: 'or',
+  Punjabi: 'pa',
+  Tamil: 'ta',
+  Telugu: 'te',
+  Assamese: 'as',
+  Urdu: 'ur',
+  Sanskrit: 'sa',
+  Nepali: 'ne',
+};
+
+type ProviderOutcome = {
+  result: (SpeakerDiarization & { model: string }) | null;
+  error: string | null;
+};
+
 function outputText(payload: Json): string {
   if (typeof payload.output_text === 'string') return payload.output_text;
   return payload.steps?.flatMap((step: Json) => step.content || [])
@@ -47,6 +70,18 @@ function outputText(payload: Json): string {
 
 function providerError(payload: Json): string {
   return payload?.error?.message || payload?.message || payload?.detail || 'Gemini returned no error details.';
+}
+
+function deepgramProviderError(payload: Json): string {
+  return payload?.err_msg || payload?.message || payload?.err_code || 'Deepgram returned no error details.';
+}
+
+async function providerOutcome(detect: () => Promise<SpeakerDiarization & { model: string }>): Promise<ProviderOutcome> {
+  try {
+    return { result: await detect(), error: null };
+  } catch (error) {
+    return { result: null, error: error instanceof Error ? error.message : 'Speaker diarization failed.' };
+  }
 }
 
 async function extractAudioFromBlob(stream: ReadableStream<Uint8Array>, extension: string) {
@@ -128,6 +163,37 @@ async function detectSpeakers(audio: string) {
   throw new Error(lastError || 'Gemini speaker detection failed on the primary and fallback models.');
 }
 
+async function detectWithDeepgram(audio: string, sourceLanguage: string): Promise<SpeakerDiarization & { model: string }> {
+  const key = process.env.DEEPGRAM_API_KEY?.trim();
+  if (!key) throw new Error('DEEPGRAM_API_KEY is missing for Deepgram speaker detection.');
+  const language = deepgramLanguageCodes[sourceLanguage];
+  if (!language) throw new Error(`Deepgram Nova-3 does not have a configured language mapping for ${sourceLanguage}.`);
+
+  const endpoint = new URL('https://api.deepgram.com/v1/listen');
+  endpoint.searchParams.set('model', 'nova-3');
+  endpoint.searchParams.set('language', language);
+  endpoint.searchParams.set('diarize_model', 'latest');
+  endpoint.searchParams.set('utterances', 'true');
+  endpoint.searchParams.set('punctuate', 'true');
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Token ${key}`,
+      'Content-Type': 'audio/mpeg',
+    },
+    body: Buffer.from(audio, 'base64'),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(55_000),
+  });
+  const payload = await response.json().catch(() => ({})) as Json;
+  if (!response.ok) {
+    throw new Error(`Deepgram speaker detection failed (${response.status}): ${deepgramProviderError(payload)}`);
+  }
+  const parsed = parseDeepgramDiarization(payload);
+  const arch = payload.metadata?.diarize_info?.arch;
+  return { ...parsed, model: `Nova-3${typeof arch === 'string' ? ` · diarizer ${arch}` : ''}` };
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -137,6 +203,7 @@ export async function POST(request: Request) {
 
     const body = await request.json() as Json;
     const blobUrl = typeof body.originalBlobUrl === 'string' ? body.originalBlobUrl : '';
+    const sourceLanguage = typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '';
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(blobUrl);
@@ -157,8 +224,11 @@ export async function POST(request: Request) {
     const extension = path.extname(blob.blob.pathname).toLowerCase();
     const supportedExtension = /^\.(mp4|mov|mkv|avi|webm|m4v|mp3|wav|m4a)$/.test(extension) ? extension : '.mp4';
     const audio = await extractAudioFromBlob(blob.stream, supportedExtension);
-    const result = await detectSpeakers(audio);
-    return NextResponse.json(result, { headers: { 'cache-control': 'no-store' } });
+    const [gemini, deepgram] = await Promise.all([
+      providerOutcome(() => detectSpeakers(audio)),
+      providerOutcome(() => detectWithDeepgram(audio, sourceLanguage)),
+    ]);
+    return NextResponse.json({ gemini, deepgram }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not detect speakers from the source audio.';
     console.error(`[api/jobs/speakers] ${message}`);

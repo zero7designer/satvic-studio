@@ -102,6 +102,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'This clip is likely too long for the current Gemini audio-review request limit. Split it into shorter clips (about 18–20 minutes or less) before starting, so Sarvam credits are not spent on a dub the QA stage cannot review.' }, { status: 413 });
     }
     if (!process.env.SARVAM_API_KEY?.trim()) return Response.json({ error: 'SARVAM_API_KEY is missing.' }, { status: 503 });
+    if (mode === 'sarvam' && !process.env.DEEPGRAM_API_KEY?.trim()) return Response.json({ error: 'DEEPGRAM_API_KEY is missing. Add your Deepgram API key before uploading the source for dual speaker detection.' }, { status: 503 });
     if (mode === 'sarvam' && (!process.env.WORKFLOW_INTERNAL_TOKEN || !(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY))) {
       return Response.json({ error: 'Background job setup is incomplete. Check WORKFLOW_INTERNAL_TOKEN and SUPABASE_SECRET_KEY.' }, { status: 503 });
     }

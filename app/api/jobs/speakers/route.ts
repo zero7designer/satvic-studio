@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createClient } from '../../../../lib/supabase/server';
+import { parseSpeakerDiarization } from '../../../../lib/qa/speaker-diarization';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -18,21 +19,22 @@ type Json = Record<string, any>;
 const speakerSchema = {
   type: 'object',
   properties: {
-    speakerCount: { type: 'integer' },
-    speakers: {
+    segments: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string' },
-          firstSeenSeconds: { type: 'number' },
+          speakerId: { type: 'string' },
+          startSeconds: { type: 'number' },
+          endSeconds: { type: 'number' },
+          text: { type: 'string' },
         },
-        required: ['id', 'firstSeenSeconds'],
+        required: ['speakerId', 'startSeconds', 'endSeconds', 'text'],
       },
     },
     note: { type: 'string' },
   },
-  required: ['speakerCount', 'speakers', 'note'],
+  required: ['segments', 'note'],
 };
 
 function outputText(payload: Json): string {
@@ -62,7 +64,7 @@ async function extractAudioFromBlob(stream: ReadableStream<Uint8Array>, extensio
     await new Promise<void>((resolve, reject) => {
       const child = spawn(executable, [
         '-nostdin', '-y', '-i', inputPath, '-map', '0:a:0', '-vn',
-        '-ac', '1', '-ar', '16000', '-b:a', '32k', '-f', 'mp3', audioPath,
+        '-ac', '2', '-ar', '24000', '-b:a', '64k', '-f', 'mp3', audioPath,
       ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
       child.stderr?.on('data', chunk => { diagnostic = `${diagnostic}${chunk}`.slice(-2000); });
       child.once('error', reject);
@@ -91,12 +93,12 @@ async function detectSpeakers(audio: string) {
     input: [
       {
         type: 'text',
-        text: 'Listen to this original audio and diarize the distinct human speakers. Count each distinct speaker once, even if they speak many times or change emotion. Include a clearly distinct off-screen narrator; exclude music, sound effects, and non-speech. Do not infer the number of visible characters. Return speaker IDs in order of first appearance and each speaker’s first-seen time in seconds. If the audio is unclear, give your best estimate and explain the uncertainty in note. If no speech is audible, return speakerCount 0, an empty speakers array, and explain that no speakers could be identified.',
+        text: 'Diarize this audio as a sequence of speech turns. Return one segment for every contiguous spoken turn, including overlapping turns as separate segments. For every segment, provide startSeconds and endSeconds measured from the beginning of the audio, the exact audible words in text, and a stable speakerId. Reuse the same speakerId across turns whenever the voice identity matches. Assign a new speakerId only when the audible voice is genuinely different. Compare vocal identity using timbre, resonance, habitual pitch range, accent, and voice quality; do not split one person because they change emotion, loudness, or speaking style, and do not merge clearly different voices merely because they share a language or gender. Exclude music and sound effects. Listen through the entire recording before deciding the labels. Number IDs in order of first appearance (speaker_1, speaker_2, etc.). Do not return a standalone speaker count; the application derives it from the unique segment labels. If speech or speaker identity is unclear, explain the uncertainty in note instead of inventing turns. If no speech is audible, return an empty segments array and explain that in note.',
       },
       { type: 'audio', data: audio, mime_type: 'audio/mp3' },
     ],
     response_format: { type: 'text', mime_type: 'application/json', schema: speakerSchema },
-    generation_config: { max_output_tokens: 1024 },
+    generation_config: { max_output_tokens: 6144 },
   };
   let lastError = '';
   for (const model of models) {
@@ -117,27 +119,10 @@ async function detectSpeakers(audio: string) {
         throw new Error(lastError);
       }
       const text = outputText(payload).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-      const result = JSON.parse(text) as Json;
-      if (!Number.isSafeInteger(result.speakerCount) || result.speakerCount < 0 || !Array.isArray(result.speakers) || result.speakers.length !== result.speakerCount) {
-        throw new Error('Gemini returned an inconsistent speaker count. Try again or enter the count manually.');
-      }
-      const speakers = result.speakers.map((speaker: Json) => ({
-        id: typeof speaker.id === 'string' ? speaker.id.trim() : '',
-        firstSeenSeconds: Number(speaker.firstSeenSeconds),
-      }));
-      if (speakers.some((speaker: { id: string; firstSeenSeconds: number }) => !speaker.id || !Number.isFinite(speaker.firstSeenSeconds) || speaker.firstSeenSeconds < 0)
-        || new Set(speakers.map((speaker: { id: string }) => speaker.id)).size !== result.speakerCount) {
-        throw new Error('Gemini returned invalid speaker labels. Try again or enter the count manually.');
-      }
-      return {
-        speakerCount: result.speakerCount as number,
-        speakers,
-        note: typeof result.note === 'string' ? result.note.slice(0, 500) : '',
-        model,
-      };
+      return { ...parseSpeakerDiarization(JSON.parse(text)), model };
     } catch (error) {
       lastError = error instanceof Error ? error.message : 'Gemini speaker detection failed.';
-      if (/inconsistent speaker count|too large for Gemini speaker detection/.test(lastError)) throw error;
+      if (/too large for Gemini speaker detection/.test(lastError)) throw error;
     }
   }
   throw new Error(lastError || 'Gemini speaker detection failed on the primary and fallback models.');

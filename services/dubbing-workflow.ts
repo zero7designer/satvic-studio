@@ -14,6 +14,7 @@ type JobInput = {
   userId: string;
   notificationEmail: string;
 };
+type GeneratedJobInput = JobInput & { numSpeakers: number };
 
 type Json = Record<string, any>;
 const SARVAM = 'https://api.sarvam.ai/dubbing';
@@ -74,7 +75,7 @@ const lang: Record<string, string> = {
   Odia: 'or-IN', Assamese: 'as-IN',
 };
 
-async function startSarvam(input: JobInput) {
+async function startSarvam(input: GeneratedJobInput) {
   'use step';
   const key = process.env.SARVAM_API_KEY?.trim();
   if (!key) throw new Error('SARVAM_API_KEY is not configured in Vercel.');
@@ -82,7 +83,7 @@ async function startSarvam(input: JobInput) {
   if (!blob) throw new Error('The uploaded source video could not be found in Blob storage.');
   const createdResponse = await fetch(`${SARVAM}/jobs`, {
     method: 'POST', headers: { 'api-subscription-key': key, 'content-type': 'application/json' },
-    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
+    body: JSON.stringify({ src_lang: lang[input.sourceLanguage], target_langs: [lang[input.targetLanguage]], export_options: ['video', 'srt'], voice_cloning: true, num_speakers: input.numSpeakers, register: 'modern-colloquial', job_name: input.projectName.slice(0, 120) || input.originalName, editor_flow: false }),
   });
   const created = await createdResponse.json().catch(() => ({}));
   if (!createdResponse.ok) throw new Error(`Sarvam could not create the dubbing job (${createdResponse.status}): ${created.message || created.detail || 'Unknown error'}`);
@@ -224,7 +225,7 @@ async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: 
     : 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Saaras transcription and Gemini review checkpoints.', dubbedBlobUrl };
 }
 
-export async function generateAndReview(input: JobInput) {
+export async function generateAndReview(input: GeneratedJobInput) {
   'use workflow';
   const workflowStartedAt = Date.now();
   let phaseStartedAt = workflowStartedAt;

@@ -78,7 +78,7 @@ Open [http://localhost:3000](http://localhost:3000). Sarvam Saaras handles speec
 
 ## Review flow
 
-1. Click **New QA project** and choose the source and dubbed languages.
+1. Click **New QA project** and choose the source and dubbed languages. For **Generate with Sarvam**, also enter the number of people speaking in the source audio; the app passes this as Sarvam's `num_speakers` setting for voice cloning, as described in the official [Sarvam Dubbing API reference](https://docs.sarvam.ai/api-reference/creative-agents-dubbing/create-dub).
 2. Upload the original video and finished dub.
 3. In **Generate with Sarvam** mode, Sarvam receives the original file, creates a dubbed video in the selected target language, and the app downloads that export locally. Dubbing is billed according to your Sarvam account and plan. The existing-dub mode skips this step.
 4. For a Sarvam-generated dub, Sarvam Saaras v4 transcribes both the original and finished dub with timestamps. Gemini translates the Saaras dubbed transcript into the source language and compares it with the original Saaras transcript. Separately, Gemini listens to both complete audio tracks together for spoken-content issues, matching dialogue by meaning and allowing source and dub timestamps to differ. A local FFmpeg scan flags long frozen sections and black screens in the dub. Sarvam's downloaded SRT is supporting evidence only.

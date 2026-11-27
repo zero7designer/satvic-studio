@@ -194,6 +194,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [source, setSource] = useState('Hindi');
   const [target, setTarget] = useState('Tamil');
   const [generationMode, setGenerationMode] = useState<'sarvam' | 'existing'>('sarvam');
+  const [speakerCount, setSpeakerCount] = useState('');
   const [projectName, setProjectName] = useState('');
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [dubbedFile, setDubbedFile] = useState<File | null>(null);
@@ -261,6 +262,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     : [Upload, FileAudio, Activity, ArrowDownToLine];
   const continueWorkflowInProject = (folderId: string) => {
     setGenerationMode(isSarvamWorkflow ? 'sarvam' : 'existing');
+    setSpeakerCount('');
     setPreflight(null);
     setProjectFolderId(folderId);
     setWorkflowProjectOpen(false);
@@ -901,7 +903,9 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     if (!cleanProjectName) { setNotice('Enter a project name to continue.'); return; }
     if (!originalFile || (generationMode === 'existing' && !dubbedFile)) { setNotice(generationMode === 'sarvam' ? 'Select the original video to send to Sarvam.' : 'Select both the original and dubbed video to start QA.'); return; }
     if (generationMode === 'sarvam' && source === target) { setNotice('Choose a target language different from the source language.'); return; }
-    const fingerprint = `${generationMode}:${originalFile.name}:${originalFile.size}:${dubbedFile?.name || ''}:${dubbedFile?.size || 0}:${source}:${target}`;
+    const parsedSpeakerCount = Number(speakerCount);
+    if (generationMode === 'sarvam' && (!Number.isSafeInteger(parsedSpeakerCount) || parsedSpeakerCount < 1)) { setNotice('Enter a whole number of speakers (at least 1).'); return; }
+    const fingerprint = `${generationMode}:${originalFile.name}:${originalFile.size}:${dubbedFile?.name || ''}:${dubbedFile?.size || 0}:${source}:${target}:${generationMode === 'sarvam' ? parsedSpeakerCount : ''}`;
     if (!preflight || preflight.fingerprint !== fingerprint) {
       setBusy(true);
       setCheckingReadiness(true);
@@ -956,14 +960,14 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           onUploadProgress: ({ percentage }) => setAnalysisProgress({ stage: `Uploading video to secure storage · ${Math.round(percentage)}%`, percent: Math.max(4, Math.round(percentage * 0.35)), status: 'processing', startedAt }),
         });
         setAnalysisProgress({ stage: 'Handing job to the server workflow', percent: 38, status: 'processing', startedAt });
-        const startResponse = await fetch('/api/jobs/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ originalBlobUrl: stored.url, originalName: originalFile.name, sourceLanguage: source, targetLanguage: target, projectName: cleanProjectName, folderId: projectFolderId || null }) });
+        const startResponse = await fetch('/api/jobs/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ originalBlobUrl: stored.url, originalName: originalFile.name, sourceLanguage: source, targetLanguage: target, projectName: cleanProjectName, folderId: projectFolderId || null, numSpeakers: parsedSpeakerCount }) });
         const startBody = await readApiJson(startResponse);
         if (!startResponse.ok) throw new Error(startBody.error || 'Could not start the server-side dubbing job.');
         const title = cleanProjectName;
         const project: Project = { title, source, target, status: 'In progress', issues: 0, date: 'Just now', createdAt: new Date().toISOString(), color: 'lilac', initials: title.slice(0, 2).toUpperCase(), jobId: startBody.runId, folderId: projectFolderId || undefined, workflowMode: 'sarvam', sourceDurationSeconds: measuredDurationSeconds || undefined };
         if (measuredDurationSeconds) updateCostDuration(project.jobId || title, (measuredDurationSeconds / 60).toFixed(2), projectFolderId || null);
         setProjects(previous => [project, ...previous]);
-        setModal(false); setOriginalFile(null); setDubbedFile(null); setProjectName('');
+        setModal(false); setOriginalFile(null); setDubbedFile(null); setProjectName(''); setSpeakerCount('');
         const backgroundLocation = startBody.runsOnVercel
           ? 'The job runs on Vercel, so you can close this browser or turn off your computer.'
           : 'This is a local run, so keep this computer and the development server running.';
@@ -1502,6 +1506,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         <label className="field-label">Video name <span>AUTOMATIC</span><input className="text-input" value={projectName} readOnly aria-readonly="true" /></label>
         <label className="field-label">Save in folder<select value={projectFolderId} onChange={event=>setProjectFolderId(event.target.value)}><option value="">No folder</option>{folders.map(folder=><option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
         <div className="language-fields"><label className="field-label">Source language<select value={source} onChange={e=>{setSource(e.target.value);setProjectName(`${e.target.value} to ${target}`)}}>{['Hindi','English','Marathi','Bengali','Gujarati','Tamil','Telugu','Kannada','Punjabi','Malayalam','Odia','Assamese','Urdu','Sanskrit','Nepali'].map(language=><option key={language}>{language}</option>)}</select></label><label className="field-label">Target language<select value={target} onChange={e=>{setTarget(e.target.value);setProjectName(`${source} to ${e.target.value}`)}}>{languages.map(language=><option key={language}>{language}</option>)}</select></label></div>
+        {generationMode === 'sarvam' && <label className="field-label">Number of speakers in the source audio<input className="text-input" type="number" min="1" step="1" inputMode="numeric" required value={speakerCount} onChange={event=>{setSpeakerCount(event.target.value);setPreflight(null)}} placeholder="For example, 2"/><small>Enter how many different people speak. Sarvam uses this to handle multiple cloned voices.</small></label>}
         <div className="video-upload-grid">
           <label className="upload-box">
             <input type="file" accept="video/*,audio/*" onChange={e=>{setOriginalFile(e.target.files?.[0] ?? null);setPreflight(null)}}/>
@@ -1518,7 +1523,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             <span className="upload-formats"><FileAudio size={12}/> MP4, MOV, MP3, WAV</span>
           </label>}
         </div>
-        <div className="privacy-note"><ShieldCheck size={15}/><span>{generationMode==='sarvam' ? 'After dubbing, Sarvam Saaras transcribes the original and dubbed audio. Gemini translates the dub transcript into the source language internally, compares it with the original transcript, then listens to both tracks for spoken-content and voice-casting issues. A local scan also flags long freezes and black screens in the dub.' : 'Sarvam Saaras transcribes both videos. Gemini translates the dub transcript into the source language internally, compares it with the original transcript, and listens to both tracks for meaning, pronunciation, pacing, and voice-casting issues. A local scan also flags long freezes and black screens in the dub.'}</span></div>
+        <div className="privacy-note"><ShieldCheck size={15}/><span>{generationMode==='sarvam' ? 'Sarvam uses the speaker count above when generating the dub. Then Saaras transcribes both tracks; Gemini compares their meaning and listens for audible speech and audio-quality issues. A local scan also flags long freezes and black screens in the dub.' : 'Sarvam Saaras transcribes both tracks. Gemini compares their meaning and listens for audible speech and audio-quality issues. A local scan also flags long freezes and black screens in the dub.'}</span></div>
         {preflight && <div className="preflight-card" role="status"><b>Preflight passed · {preflight.geminiModel} and storage checked</b><span>Your media has not been uploaded or sent to Sarvam yet. Click “Confirm &amp; start job” below to begin.</span><span>Estimated Blob space needed: {(preflight.storage.requiredBytes/1024/1024).toFixed(1)} MB including reserve. Available: {(preflight.storage.availableBytes/1024/1024).toFixed(1)} MB.</span>{preflight.cleanupNeeded ? <span className="preflight-warning">To make room, confirmation will delete inactive video/audio files from earlier jobs. Reports and active jobs are kept; old video playback/download links will stop working.</span> : <span>No old media needs to be cleared.</span>}<small>{preflight.limitations} This check uses a small Gemini request; Sarvam credits are not checked or reserved. Check Sarvam Dashboard → Billing before confirming.</small></div>}
         {busy && !checkingReadiness && <div className="analysis-progress" role="status" aria-live="polite"><div className="progress-heading"><b>{analysisProgress.stage || 'Preparing your analysis'}</b><span>{Math.min(100, analysisProgress.percent)}%</span></div><div className="progress-track" role="progressbar" aria-label="Analysis progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={analysisProgress.percent}><span style={{width: `${analysisProgress.percent}%`}} /></div><div className="progress-meta"><span>Elapsed {formatDuration(elapsedSeconds)}</span><b>{remainingEstimate(estimatedRange, elapsedSeconds)}</b></div><small>Time is an estimate; Sarvam dubbing, Saaras transcription, and Gemini review can take several minutes.</small></div>}
         <button className="primary-btn modal-submit" type="submit" disabled={busy}>{busy?<><span className="spinner"/> {checkingReadiness?'Checking providers…':analysisProgress.stage?.toLowerCase().includes('storage')?'Checking storage…':generationMode==='sarvam'&&analysisProgress.percent<74?'Preparing / generating dub…':'AI listening & comparing…'}</>:<>{preflight ? (preflight.cleanupNeeded ? 'Clear old media & start' : 'Confirm & start job') : 'Check readiness first'} <ArrowRight size={15}/></>}</button>

@@ -67,6 +67,8 @@ type QaCheckpoint = {
   textReviewComplete?: boolean;
   textReviewAttempted?: boolean;
   audioReviewComplete?: boolean;
+  transcriptReviewPromptVersion?: number;
+  reviewRunId?: string;
   transcriptCrossCheckError?: string | null;
 };
 type Json = Record<string, any>;
@@ -605,7 +607,7 @@ async function geminiTranscriptReviewPass(source: Transcript, dub: Transcript, c
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for transcript review.');
   const model = process.env.GEMINI_TRANSCRIPT_REVIEW_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
-  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Both passages are Saaras v4 transcripts of the original audio and finished dubbed audio. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. Translate the DUB CORE below into ${sourceLanguage} and return that translation in backTranslation. Keep its original order, but omit segment numbers and timestamps from the translation. Use this Gemini translation to compare meaning with the original transcript. Compare corresponding ideas in narrative order, not merely lines with similar timestamps; the source and dub may speak the same idea at different times. Never pair unrelated source and dub passages. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording is correct. Use the overlapping transcript context to handle timing shifts, but translate only the DUB CORE so adjacent passages do not duplicate evidence. Do not call content missing or added only because it is absent from one passage. Quote exact original and dubbed Saaras transcript text, and return segment indexes that contain those exact quotes. For each finding, include backTranslationQuote: a natural ${sourceLanguage} translation of that exact dubQuote. Use it as the bridge to sourceQuote; do not report a mismatch if the quoted passages are unrelated. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings. Return an empty list when no mismatch is evident. JSON only: {"backTranslation":"dub core translated to source language","findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact dubbed transcript phrase","backTranslationQuote":"dub quote translated to source language","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
+  const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Both passages are Saaras v4 transcripts of the original audio and finished dubbed audio. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. Translate the DUB CORE below into ${sourceLanguage} and return that translation in backTranslation. Keep its original order, but omit segment numbers and timestamps from the translation. Use this Gemini translation to compare meaning with the original transcript. Compare complete clauses and propositions by meaning, never word-by-word or by matching words in the same position. For example, Hindi "मैं लड़का हूँ" means "I am a boy"; do not compare "I am" with "लड़का" as if those were corresponding phrases. Compare corresponding ideas in narrative order, not merely lines with similar timestamps; the source and dub may speak the same idea at different times. First identify the full dubbed clause, translate that clause naturally, then compare it with the source clause expressing the same idea. Never pair unrelated source and dub passages, including adjacent sentences that happen to fall in the same time window. Only report a mismatch when the exact quoted source and dub phrases express the same proposition but differ in meaning; if you cannot confidently align them, do not report a mismatch. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording and language-specific word order are correct. Use the overlapping transcript context to handle timing shifts, but translate only the DUB CORE so adjacent passages do not duplicate evidence. Do not call content missing or added only because it is absent from one passage. Quote exact original and dubbed Saaras transcript text, and return segment indexes that contain those exact quotes. For each finding, include backTranslationQuote: a natural ${sourceLanguage} translation of that exact dubQuote. Use it as the bridge to sourceQuote; do not report a mismatch if the quoted passages are unrelated. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings. Return an empty list when no mismatch is evident. JSON only: {"backTranslation":"dub core translated to source language","findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact dubbed transcript phrase","backTranslationQuote":"dub quote translated to source language","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
 
 SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO TRANSCRIPT (${targetLanguage}):\n${chunk.dubText}\n\nDUB CORE TO TRANSLATE ONCE (${targetLanguage}):\n${chunk.backTranslationText}`;
   const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 150_000);
@@ -646,7 +648,7 @@ async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, 
   const body = {
     model,
     input: [
-      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The supplied source transcript and dub transcript or SRT help locate speech but may contain omissions or errors; the attached audio itself is authoritative. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching transcript as proof that the dub audio is correct. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied transcripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[ {"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}` },
+      { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The supplied source transcript and dub transcript or SRT help locate speech but may contain omissions or errors; the attached audio itself is authoritative. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching transcript as proof that the dub audio is correct. Align complete clauses by meaning, not individual words or their position in the sentence. For example, Hindi "मैं लड़का हूँ" means "I am a boy"; do not compare "I am" with "लड़का" as if they were corresponding phrases. Translation word order and natural rewording are not errors. Use surrounding context and narrative order—not just the nearest timestamp—to align translated dialogue when timing differs. The transcript context below includes nearby sentences outside the attached audio clips; use those lines only to match the same idea across languages, never as evidence for a finding. Findings must be audible in the attached clips. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied transcripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Only report a mismatch when the source and dub quotes express the same proposition but differ in meaning; if you cannot confidently match them, state the uncertainty instead of pairing unrelated or adjacent sentences. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[ {"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT CONTEXT (seconds; includes nearby sentences around this clip):\n${formatSegmentsRange(source.segments, Math.max(0, clipStart - 30), clipEnd + 30)}\n\nDUB TRANSCRIPT CONTEXT (seconds; includes nearby sentences around this clip):\n${formatSegmentsRange(dub.segments, Math.max(0, clipStart - 30), clipEnd + 30)}\n\nFull source transcript: ${sourceInput.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dubInput.transcript.slice(0, 8000)}` },
       { type: 'audio', data: sourceClip.data, mime_type: sourceClip.mime_type },
       { type: 'audio', data: dubClip.data, mime_type: dubClip.mime_type },
     ],
@@ -727,7 +729,12 @@ export async function POST(request: Request) {
     const form = isJson ? null : await request.formData();
     const json: Json = isJson ? await request.json() : {};
     const generatedBySarvam = json.generatedBySarvam === true;
-  if (!key) return NextResponse.json({ error: 'Add SARVAM_API_KEY to .env.local. Saaras transcription is required for source and dubbed audio QA.' }, { status: 503 });
+    const reviewOnly = json.reviewOnly === true;
+    const reviewRunId = typeof json.reviewRunId === 'string' ? json.reviewRunId : '';
+    if (reviewOnly && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reviewRunId)) {
+      return NextResponse.json({ error: 'A valid QA review run ID is required.' }, { status: 400 });
+    }
+  if (!key && !reviewOnly) return NextResponse.json({ error: 'Add SARVAM_API_KEY to .env.local. Saaras transcription is required for source and dubbed audio QA.' }, { status: 503 });
     historyJobId = String(json.historyJobId || '');
     if (historyJobId) {
       const internalToken = request.headers.get('x-workflow-internal');
@@ -830,7 +837,10 @@ export async function POST(request: Request) {
     let dubbedScriptResult = parsedDubScript;
     let dubbedResult = checkpoint.dubbedResult;
     if (dubbedResult && dubbedResult.engine !== 'Sarvam Saaras v4') dubbedResult = checkpoint.dubbedResult = undefined;
-    if (checkpoint.transcriptComparisonVersion !== 8) {
+    if (reviewOnly && (!originalResult || !dubbedResult || originalResult.engine !== 'Sarvam Saaras v4' || dubbedResult.engine !== 'Sarvam Saaras v4' || !originalResult.transcript.trim() || !dubbedResult.transcript.trim())) {
+      return NextResponse.json({ error: 'Saved Saaras transcripts are not available for this project. QA was not started, and no new transcription was requested.' }, { status: 409 });
+    }
+    if (!reviewOnly && checkpoint.transcriptComparisonVersion !== 8) {
       if (generatedBySarvam && originalResult?.engine !== 'Sarvam Saaras v4') originalResult = checkpoint.originalResult = undefined;
       dubbedResult = checkpoint.dubbedResult = undefined;
       checkpoint.dubbedAudioResult = undefined;
@@ -849,13 +859,42 @@ export async function POST(request: Request) {
       checkpoint.audioFindings = [];
       checkpoint.audioReviewChunkCount = undefined;
     }
-    if (checkpoint.audioReviewPromptVersion !== 2) {
+    if (reviewOnly && checkpoint.reviewRunId !== reviewRunId) {
+      checkpoint.textReviewComplete = false;
+      checkpoint.textReviewAttempted = false;
+      checkpoint.textFindings = [];
+      checkpoint.textReviewChunks = {};
+      checkpoint.textReviewChunkCount = undefined;
+      checkpoint.textBackTranslations = {};
+      checkpoint.transcriptReviewModels = [];
+      checkpoint.backTranslation = undefined;
       checkpoint.audioReviewComplete = false;
       checkpoint.audioReviewChunks = {};
       checkpoint.audioReviewModels = [];
       checkpoint.audioFindings = [];
       checkpoint.audioReviewChunkCount = undefined;
-      checkpoint.audioReviewPromptVersion = 2;
+      checkpoint.videoReviewComplete = false;
+      checkpoint.videoReviewFindings = [];
+      checkpoint.reviewRunId = reviewRunId;
+    }
+    if (checkpoint.transcriptReviewPromptVersion !== 1) {
+      checkpoint.textReviewComplete = false;
+      checkpoint.textReviewAttempted = false;
+      checkpoint.textFindings = [];
+      checkpoint.textReviewChunks = {};
+      checkpoint.textReviewChunkCount = undefined;
+      checkpoint.textBackTranslations = {};
+      checkpoint.transcriptReviewModels = [];
+      checkpoint.backTranslation = undefined;
+      checkpoint.transcriptReviewPromptVersion = 1;
+    }
+    if (checkpoint.audioReviewPromptVersion !== 3) {
+      checkpoint.audioReviewComplete = false;
+      checkpoint.audioReviewChunks = {};
+      checkpoint.audioReviewModels = [];
+      checkpoint.audioFindings = [];
+      checkpoint.audioReviewChunkCount = undefined;
+      checkpoint.audioReviewPromptVersion = 3;
     }
     if (checkpoint.videoReviewVersion !== 1) {
       checkpoint.videoReviewComplete = false;

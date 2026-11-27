@@ -161,7 +161,7 @@ async function saveDub(downloadUrl: string, userId: string, jobId: string) {
   return blob.url;
 }
 
-async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null) {
+async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null, reviewRunId?: string) {
   'use step';
   const appUrl = appBaseUrl();
   if (!appUrl) throw new Error('APP_BASE_URL is missing. Set it to your deployed Vercel URL so the workflow can start QA.');
@@ -172,7 +172,7 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
   try {
     response = await fetch(`${appUrl}/api/analyze`, {
       method: 'POST', headers,
-      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, generatedBySarvam: true, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
+      body: JSON.stringify({ originalBlobUrl: input.originalBlobUrl, dubbedBlobUrl, dubbedSubtitleSrt, generatedBySarvam: true, reviewOnly: Boolean(reviewRunId), reviewRunId, originalName: input.originalName, projectName: input.projectName, sourceLanguage: input.sourceLanguage, targetLanguage: input.targetLanguage, historyJobId: input.dbJobId, userId: input.userId, notificationEmail: input.notificationEmail }),
       signal: AbortSignal.timeout(285_000),
     });
   } catch (error) {
@@ -207,11 +207,11 @@ async function runQaAttempt(input: JobInput, dubbedBlobUrl: string, dubbedSubtit
   return { reportBlobUrl: storedReport.url, dubbedBlobUrl, issueCount: Array.isArray(body.findings) ? body.findings.length : 0, reviewComplete, reviewWarning };
 }
 
-async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null) {
-  // QA retries resume saved Saaras transcription and Gemini review checkpoints without starting another dub.
+async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: string | null, reviewRunId?: string) {
+  // Timed-out QA resumes saved checkpoints; explicit reruns reuse stored transcripts without new Saaras jobs.
   const maxResumeAttempts = 40;
   for (let attempt = 1; attempt <= maxResumeAttempts; attempt += 1) {
-    const result = await runQaAttempt(input, dubbedBlobUrl, dubbedSubtitleSrt);
+    const result = await runQaAttempt(input, dubbedBlobUrl, dubbedSubtitleSrt, reviewRunId);
     if (!('jobError' in result) || typeof result.jobError !== 'string') return result;
     const canResumeSarvam = /Sarvam transcription job .+ is still processing/i.test(result.jobError);
     const canResumeCheckpoint = /QA did not finish within Vercel|QA reached Vercel|QA checkpoint retry:/i.test(result.jobError);
@@ -219,7 +219,9 @@ async function runQa(input: JobInput, dubbedBlobUrl: string, dubbedSubtitleSrt: 
     console.info(`[dubbing-workflow] job=${input.dbJobId} resuming saved QA checkpoint check=${attempt + 1}/${maxResumeAttempts}`);
     await sleep(canResumeSarvam ? '10s' : '20s');
   }
-  return { jobError: 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Saaras transcription and Gemini review checkpoints.' , dubbedBlobUrl };
+  return { jobError: reviewRunId
+    ? 'QA could not finish after repeated checks. The saved dub and Saaras transcripts are safe; retry QA to resume review checkpoints without transcribing again.'
+    : 'QA could not finish after repeated checks. The saved Sarvam dub is safe; retry QA to resume saved Saaras transcription and Gemini review checkpoints.', dubbedBlobUrl };
 }
 
 export async function generateAndReview(input: JobInput) {
@@ -280,10 +282,11 @@ export async function generateAndReview(input: JobInput) {
 
 export async function retryQualityReview(input: JobInput & { dubbedBlobUrl: string }) {
   'use workflow';
+  const reviewRunId = crypto.randomUUID();
   await updateHistory(input, { status: 'running', error_message: null });
   try {
-    await sendJobEmail(input, 'started', 'QA is being retried using the saved Sarvam dub. The video will not be dubbed again.');
-    const result = await runQa(input, input.dubbedBlobUrl, null);
+    await sendJobEmail(input, 'started', 'QA is being rerun using the saved Sarvam dub and Saaras transcripts. The video will not be dubbed or transcribed again.');
+    const result = await runQa(input, input.dubbedBlobUrl, null, reviewRunId);
     if ('jobError' in result && typeof result.jobError === 'string') {
       await updateHistory(input, { dubbed_blob_url: input.dubbedBlobUrl, status: 'failed', error_message: result.jobError });
       await sendJobEmail(input, 'failed', result.jobError);

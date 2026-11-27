@@ -17,12 +17,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ru
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: 'Sign in before retrying QA.' }, { status: 401 });
     const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId);
-    const lookup = supabase.from('qa_jobs').select('id,run_id,project_name,original_name,source_language,target_language,original_blob_url,dubbed_blob_url,status,error_message,updated_at').eq('user_id', user.id);
+    const lookup = supabase.from('qa_jobs').select('id,run_id,project_name,original_name,source_language,target_language,original_blob_url,dubbed_blob_url,report_blob_url,status,error_message,updated_at').eq('user_id', user.id);
     const { data: job, error: lookupError } = byId ? await lookup.eq('id', runId).maybeSingle() : await lookup.eq('run_id', runId).maybeSingle();
     if (lookupError) throw lookupError;
     if (!job) return Response.json({ error: 'This project was not found in your account.' }, { status: 404 });
     const retryingIncompleteReview = job.status === 'completed' && job.error_message?.startsWith('QA review incomplete:');
-    if (job.status !== 'failed' && !retryingIncompleteReview) return Response.json({ error: 'Only failed or incomplete QA projects can retry review.' }, { status: 409 });
+    const rerunningCompletedReview = job.status === 'completed' && Boolean(job.report_blob_url);
+    if (job.status !== 'failed' && !retryingIncompleteReview && !rerunningCompletedReview) return Response.json({ error: 'Only completed, failed, or incomplete QA projects can retry review.' }, { status: 409 });
     let dubbedBlobUrl = job.dubbed_blob_url as string | null;
     if (!dubbedBlobUrl && job.run_id) {
       try {

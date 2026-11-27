@@ -13,6 +13,7 @@ import {
   LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Share2, ShieldCheck, Trash2,
   Upload, X, Zap,
 } from 'lucide-react';
+import { qaJobProjectStatus, qaProjectStatus } from '@/lib/qa/review-status';
 
 type Issue = { title: string; detail: string; time?: string; source?: string; severity: 'critical' | 'review' | 'info'; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only' | 'visual-only'; sourceQuote?: string; dubQuote?: string; backTranslationQuote?: string };
 type Project = { title: string; source: string; target: string; status: 'Needs review' | 'In progress' | 'Ready' | 'Failed' | 'Example'; issues: number; date: string; createdAt?: string; color: string; initials: string; jobId?: string; folderId?: string; completedSeconds?: number; sourceDurationSeconds?: number; workflowMode?: 'sarvam' | 'review'; errorMessage?: string; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; dubbedAvailable?: boolean; isExample?: boolean; readOnly?: boolean };
@@ -21,16 +22,6 @@ type ProjectFolder = { id: string; name: string; created_at: string; video_type:
 type TranscriptSegment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type AnalysisReport = { project: string; sourceLanguage: string; targetLanguage: string; createdAt: string; originalTranscript: string; dubbedTranscript: string; dubSubtitleTranscript?: string; dubSubtitleSegments?: TranscriptSegment[]; backTranslation: string; findings: Issue[]; disclaimer: string; originalSegments: TranscriptSegment[]; dubbedSegments: TranscriptSegment[]; timestampsAvailable: boolean; transcriptionEngine: string; semanticReviewEngine: string | null; transcriptCrossCheckAvailable: boolean; transcriptCrossCheckError?: string | null; audioReviewCompleted?: boolean; audioReviewEngine?: string; audioReviewFindingCount?: number; audioReviewChunkCount?: number; videoReviewCompleted?: boolean; videoReviewEngine?: string; videoReviewFindingCount?: number; transcriptReviewChunkCount?: number; reviewCoverageWarnings?: string[]; reviewComplete?: boolean; generatedBySarvam?: boolean; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; originalB2Key?: string | null; dubbedB2Key?: string | null; reportB2Key?: string | null };
 type Preflight = { fingerprint: string; geminiModel: string; cleanupNeeded: boolean; storage: { availableBytes: number; requiredBytes: number; cleanedBytes?: number }; limitations: string; durationSeconds?: number };
-
-function reportReviewIsComplete(report?: AnalysisReport | null) {
-  return Boolean(report && (report.reviewComplete === true || report.findings.length === 0));
-}
-
-function normalizeReportReviewStatus(report: AnalysisReport): AnalysisReport {
-  return report.findings.length === 0 && report.reviewComplete !== true
-    ? { ...report, reviewComplete: true }
-    : report;
-}
 
 const initialProjects: Project[] = [];
 const exampleProject: Project = { title: 'Hindi–Marathi', source: 'Hindi', target: 'Marathi', status: 'Example', issues: 0, date: 'Shared demo', color: 'lilac', initials: 'HI', isExample: true };
@@ -364,7 +355,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           const response = await fetch(`/api/jobs/${encodeURIComponent(job.run_id || job.id)}`, { cache: 'no-store' });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) return job;
-          if (body.status === 'completed' && body.report) return { ...job, status: 'completed', issue_count: body.report.findings?.length || 0 };
+          if (body.status === 'completed' && body.report) {
+            const reviewWarning = body.report.reviewComplete === true
+              ? null
+              : body.report.transcriptCrossCheckError || body.report.reviewCoverageWarnings?.join(' ') || 'QA review incomplete.';
+            return { ...job, status: 'completed', issue_count: body.report.findings?.length || 0, error_message: reviewWarning };
+          }
           if (body.status === 'failed') return { ...job, status: 'failed', error_message: body.error || job.error_message || 'Background workflow failed. Open the project for details.' };
           return job;
         }));
@@ -373,9 +369,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         const merged = jobs.map(job => latest.get(job.run_id || job.id) || job);
         setProjects([exampleProject, ...merged.map((job) => {
           const completionMs = job.updated_at ? Date.parse(job.updated_at) - Date.parse(job.created_at) : NaN;
-          const cleanCompletedJob = job.status === 'completed' && !job.issue_count;
-          const needsReview = Boolean(job.issue_count);
-          const status: Project['status'] = job.status === 'completed' ? (needsReview ? 'Needs review' : 'Ready') : job.status === 'failed' ? 'Failed' : 'In progress';
+          const cleanCompletedJob = job.status === 'completed' && !job.issue_count && !job.error_message;
+          const status: Project['status'] = qaJobProjectStatus({ status: job.status, issueCount: job.issue_count, errorMessage: job.error_message });
           return { title: job.project_name, source: job.source_language, target: job.target_language, status, issues: job.issue_count || 0, date: new Date(job.created_at).toLocaleDateString(), createdAt: job.created_at, color: 'lilac', initials: job.project_name.slice(0, 2).toUpperCase(), jobId: job.run_id || job.id, folderId: job.folder_id || undefined, workflowMode: job.run_id ? 'sarvam' as const : 'review' as const, originalVideoUrl: job.original_video_url || null, dubbedAvailable: Boolean(job.dubbed_available), completedSeconds: (job.status === 'completed' || job.status === 'failed') && Number.isFinite(completionMs) && completionMs >= 0 ? Math.round(completionMs / 1000) : undefined, errorMessage: cleanCompletedJob ? undefined : job.error_message || undefined, readOnly: Boolean(job.read_only) };
         })]);
       } catch { /* Keep the current dashboard visible if history is temporarily unavailable. */ }
@@ -424,7 +419,13 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       .then(async response => ({ response, body: await response.json().catch(() => ({})) }))
       .then(({ response, body }) => {
         if (!active) return;
-        if (response.ok && body.report) setReport(normalizeReportReviewStatus(body.report as AnalysisReport));
+        if (response.ok && body.report) {
+          const loadedReport = body.report as AnalysisReport;
+          const status = qaProjectStatus(loadedReport);
+          setReport(loadedReport);
+          setDetails(current => current && current.jobId === details.jobId ? { ...current, status } : current);
+          setProjects(current => current.map(project => project.jobId === details.jobId ? { ...project, status } : project));
+        }
         else if (body.status === 'running') setNotice('This job is still running on the server. Check back here after it completes.');
         else if (body.status === 'failed' || !response.ok) {
           if (body.status === 'failed' && (body.originalVideoUrl || body.dubbedVideoUrl)) setDetails(current => current && current.jobId === details.jobId ? { ...current, originalVideoUrl: body.originalVideoUrl || current.originalVideoUrl, dubbedVideoUrl: body.dubbedVideoUrl || current.dubbedVideoUrl, dubbedAvailable: Boolean(body.dubbedVideoUrl || current.dubbedAvailable) } : current);
@@ -445,8 +446,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         const body = await response.json().catch(() => ({}));
         if (!active || !response.ok) return;
         if (body.status === 'completed' && body.report) {
-          const nextReport = normalizeReportReviewStatus(body.report as AnalysisReport);
-          const nextStatus: Project['status'] = nextReport.findings.length ? 'Needs review' : 'Ready';
+          const nextReport = body.report as AnalysisReport;
+          const nextStatus: Project['status'] = qaProjectStatus(nextReport);
           setReport(nextReport);
           setDetails(current => {
             if (!current || current.jobId !== jobId) return current;
@@ -607,7 +608,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     fetch(`/api/jobs/${encodeURIComponent(latestFindingProject.jobId)}`, { cache: 'no-store' })
       .then(async response => ({ response, body: await response.json().catch(() => ({})) }))
       .then(({ response, body }) => {
-        if (active && response.ok && body.report) setLatestReport(normalizeReportReviewStatus(body.report as AnalysisReport));
+        if (active && response.ok && body.report) setLatestReport(body.report as AnalysisReport);
       })
       .catch(() => { /* Keep the flag count visible if the report is temporarily unavailable. */ });
     return () => { active = false; };
@@ -652,13 +653,13 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     : 'Dubbed-video scan unavailable.';
   const audioReviewSummary = !report?.audioReviewCompleted
     ? `${transcriptReviewEvidence ? `${transcriptReviewEvidence} ` : ''}Audio review unavailable. ${videoReviewEvidence}`
-    : report.reviewComplete === false
+    : report.reviewComplete !== true
       ? `${audioReviewEvidence}${transcriptReviewEvidence ? ` ${transcriptReviewEvidence}` : ''} ${videoReviewEvidence} Review incomplete: ${report.transcriptCrossCheckError || report.reviewCoverageWarnings?.join(' ') || 'The transcript comparison or timing coverage did not complete.'}`
       : (report.audioReviewFindingCount ?? 0) > 0
         ? `${audioReviewEvidence}${transcriptReviewEvidence ? ` ${transcriptReviewEvidence}` : ''} ${videoReviewEvidence} ${report.audioReviewFindingCount} audio finding${report.audioReviewFindingCount === 1 ? '' : 's'}; check the timestamps below.`
         : report.findings.some(finding => finding.evidenceStatus === 'transcript-only')
           ? `${audioReviewEvidence}${transcriptReviewEvidence ? ` ${transcriptReviewEvidence}` : ''} ${videoReviewEvidence} No direct audio findings; transcript flags are unconfirmed.`
-          : `${audioReviewEvidence}${transcriptReviewEvidence ? ` ${transcriptReviewEvidence}` : ''} ${videoReviewEvidence} No direct audio findings.`;
+          : `${audioReviewEvidence}${transcriptReviewEvidence ? ` ${transcriptReviewEvidence}` : ''} ${videoReviewEvidence} No audio mismatches were flagged. This does not prove the dub is error-free; listen to both tracks before approval.`;
 
   async function retrySavedDubQa(project: Project) {
     if (project.readOnly) { setNotice('Shared projects are read-only.'); return; }
@@ -986,11 +987,11 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       const response = await fetch('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ originalBlobUrl: originalStored.url, dubbedBlobUrl: dubbedStored.url, originalName: originalFile.name, sourceLanguage: source, targetLanguage: target, projectName: title, historyJobId: jobBody.jobId, progressId }) });
       const body = await readApiJson(response);
       if (!response.ok) throw new Error(body.error || 'Analysis failed.');
-      const result = normalizeReportReviewStatus(body as AnalysisReport);
+      const result = body as AnalysisReport;
       result.originalVideoUrl = `/api/jobs/media?runId=${encodeURIComponent(jobBody.jobId)}&url=${encodeURIComponent(originalStored.url)}`;
       result.dubbedVideoUrl = `/api/jobs/media?runId=${encodeURIComponent(jobBody.jobId)}&url=${encodeURIComponent(dubbedStored.url)}`;
       result.generatedBySarvam = false;
-      const project: Project = { title: result.project || title, source, target, status: reportReviewIsComplete(result) && result.findings.length === 0 ? 'Ready' : 'Needs review', issues: result.findings.length, date: 'Just now', createdAt: new Date().toISOString(), color: 'lilac', initials: title.slice(0, 2).toUpperCase(), jobId: jobBody.jobId, folderId: projectFolderId || undefined, workflowMode: 'review', sourceDurationSeconds: measuredDurationSeconds || undefined };
+      const project: Project = { title: result.project || title, source, target, status: qaProjectStatus(result), issues: result.findings.length, date: 'Just now', createdAt: new Date().toISOString(), color: 'lilac', initials: title.slice(0, 2).toUpperCase(), jobId: jobBody.jobId, folderId: projectFolderId || undefined, workflowMode: 'review', sourceDurationSeconds: measuredDurationSeconds || undefined };
       if (measuredDurationSeconds) updateCostDuration(project.jobId || title, (measuredDurationSeconds / 60).toFixed(2), projectFolderId || null);
       setReport(result); setLatestReport(result); setProjects((prev) => [project, ...prev]); setDetails(project);
       setModal(false); setOriginalFile(null); setDubbedFile(null); setProjectName(''); setNotice('AI listened to both audio tracks. Open the report for timestamped findings.');

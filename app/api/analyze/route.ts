@@ -11,6 +11,7 @@ import { createClient } from '../../../lib/supabase/server';
 import { createAdminClient } from '../../../lib/supabase/admin';
 import { sendGmailJobEmail } from '../../../lib/email/gmail';
 import { appUrl } from '../../../lib/app-url';
+import { hasSupportedTranscriptEvidence, locateTranscriptQuote, transcriptContainsQuote } from '../../../lib/qa/transcript-review';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -465,26 +466,6 @@ function phrasesSupportSameFinding(audio: AudioFinding, text: AudioFinding) {
   return overlap(audio.sourceQuote || '', text.sourceQuote || '') && overlap(audio.dubQuote || '', text.dubQuote || '');
 }
 
-function locateQuote(segments: Segment[], phrase: string, suggestedStartIndex: unknown) {
-  const phraseTokens = phrase.normalize('NFKC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
-  if (!phraseTokens.length || !segments.length) return { start: undefined, end: undefined };
-  const transcriptTokens = segments.flatMap((segment, segmentIndex) =>
-    (segment.text.normalize('NFKC').toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
-      .map(token => ({ token, segmentIndex })),
-  );
-  const matches: { first: number; last: number }[] = [];
-  for (let index = 0; index <= transcriptTokens.length - phraseTokens.length; index += 1) {
-    if (phraseTokens.every((token, offset) => transcriptTokens[index + offset].token === token)) {
-      matches.push({ first: transcriptTokens[index].segmentIndex, last: transcriptTokens[index + phraseTokens.length - 1].segmentIndex });
-    }
-  }
-  if (!matches.length) return { start: undefined, end: undefined };
-  const preferredIndex = Number.isInteger(suggestedStartIndex) ? Number(suggestedStartIndex) : matches[0].first;
-  const match = matches.reduce((closest, candidate) =>
-    Math.abs(candidate.first - preferredIndex) < Math.abs(closest.first - preferredIndex) ? candidate : closest,
-  );
-  return { start: segments[match.first].start, end: segments[match.last].end };
-}
 function buildTranscriptReviewChunks(source: Transcript, dub: Transcript): TranscriptReviewChunk[] {
   const makeTextChunks = () => {
     const chunkSize = 6500;
@@ -570,7 +551,8 @@ async function geminiTranscriptReviewPass(source: Transcript, dub: Transcript, c
   const prompt = `You are reviewing passage ${Number(chunk.id) + 1} in a full-video dubbing QA. Both passages are Saaras v4 transcripts of the original audio and finished dubbed audio. Source language: ${sourceLanguage}; dub language: ${targetLanguage}. Translate the DUB CORE below into ${sourceLanguage} and return that translation in backTranslation. Keep its original order, but omit segment numbers and timestamps from the translation. Use this Gemini translation to compare meaning with the original transcript. Compare complete clauses and propositions by meaning, never word-by-word or by matching words in the same position. For example, Hindi "मैं लड़का हूँ" means "I am a boy"; do not compare "I am" with "लड़का" as if those were corresponding phrases. Compare corresponding ideas in narrative order, not merely lines with similar timestamps; the source and dub may speak the same idea at different times. First identify the full dubbed clause, translate that clause naturally, then compare it with the source clause expressing the same idea. Never pair unrelated source and dub passages, including adjacent sentences that happen to fall in the same time window. Only report a mismatch when the exact quoted source and dub phrases express the same proposition but differ in meaning; if you cannot confidently align them, do not report a mismatch. Check each idea in both directions, including every number, name, quantity, negation, instruction, omission, and addition. Natural rewording and language-specific word order are correct. Use the overlapping transcript context to handle timing shifts, but translate only the DUB CORE so adjacent passages do not duplicate evidence. Do not call content missing or added only because it is absent from one passage. Quote exact original and dubbed Saaras transcript text, and return segment indexes that contain those exact quotes. For each finding, include backTranslationQuote: a natural ${sourceLanguage} translation of that exact dubQuote. Use it as the bridge to sourceQuote; do not report a mismatch if the quoted passages are unrelated. Do not infer pronunciation, voice gender, or accent from text. Do not judge health advice without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Return every distinct concrete mismatch in separate findings. Return an empty list when no mismatch is evident. JSON only: {"backTranslation":"dub core translated to source language","findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Other","title":"short issue","detail":"plain-English explanation of the difference","sourceQuote":"exact source phrase","dubQuote":"exact dubbed transcript phrase","backTranslationQuote":"dub quote translated to source language","sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}
 
 SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO TRANSCRIPT (${targetLanguage}):\n${chunk.dubText}\n\nDUB CORE TO TRANSLATE ONCE (${targetLanguage}):\n${chunk.backTranslationText}`;
-  const response = await geminiRequest({ model, input: prompt, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 150_000);
+  const evidencePolicy = `\n\nOmission/addition evidence exception: a genuine omission has sourceQuote set to the exact source text and dubQuote and backTranslationQuote set to empty strings. A genuine addition has sourceQuote empty, dubQuote set to exact dub transcript text, and backTranslationQuote set to its translation into ${sourceLanguage}. Use category "Omission/addition". Never invent text for a missing side. Only flag it when the whole surrounding passage confirms the content is absent, not merely outside this chunk. For every non-empty sourceQuote or dubQuote, copy an exact contiguous phrase from the corresponding Saaras transcript above.`;
+  const response = await geminiRequest({ model, input: `${prompt}${evidencePolicy}`, response_format: { type: 'text', mime_type: 'application/json', schema: transcriptFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 150_000);
   const usedModel = response.headers.get('x-satvic-gemini-model');
   if (usedModel) modelsUsed.add(usedModel);
   const payload = await response.json().catch(() => ({}));
@@ -580,23 +562,34 @@ SOURCE AUDIO TRANSCRIPT (${sourceLanguage}):\n${chunk.sourceText}\n\nDUB AUDIO T
   try { parsed = JSON.parse(output.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
   catch { throw new Error(`Gemini transcript cross-check returned incomplete or invalid JSON for passage ${Number(chunk.id) + 1}.`); }
   if (!Array.isArray(parsed.findings)) throw new Error(`Gemini transcript cross-check returned invalid findings for passage ${Number(chunk.id) + 1}.`);
+  if (parsed.findings.some((item: Json) => !item?.title || !item?.detail || !['critical', 'review', 'info'].includes(item.severity))) {
+    throw new Error(`Gemini transcript cross-check returned a malformed finding for passage ${Number(chunk.id) + 1}.`);
+  }
   const backTranslation = typeof parsed.backTranslation === 'string' ? parsed.backTranslation.trim() : '';
   if (chunk.backTranslationText.trim() && !backTranslation) throw new Error(`Gemini did not return the back-translation for passage ${Number(chunk.id) + 1}.`);
-  if (parsed.findings.some((item: Json) => item?.title && item?.detail && item?.sourceQuote?.trim() && item?.dubQuote?.trim() && !item?.backTranslationQuote?.trim())) {
-    throw new Error(`Gemini returned a transcript finding without back-translation evidence for passage ${Number(chunk.id) + 1}.`);
-  }
   const findingsByKey = new Map<string, AudioFinding>();
-  for (const item of parsed.findings.filter((entry: Json) => entry?.title && entry?.detail && entry?.sourceQuote?.trim() && entry?.dubQuote?.trim() && entry?.backTranslationQuote?.trim() && ['critical', 'review', 'info'].includes(entry.severity))) {
-    const sourceQuote = String(item.sourceQuote).slice(0, 300);
-    const dubQuote = String(item.dubQuote).slice(0, 300);
-    const backTranslationQuote = String(item.backTranslationQuote).slice(0, 300);
-    const sourceLocation = locateQuote(source.segments, sourceQuote, item.sourceStartSegment);
-    const dubLocation = locateQuote(dub.segments, dubQuote, item.dubStartSegment);
-    const finding: AudioFinding = { severity: item.severity, title: String(item.title).slice(0, 140), detail: String(item.detail).slice(0, 1000), category: String(item.category || 'Meaning'), sourceQuote, dubQuote, backTranslationQuote, sourceStart: sourceLocation.start, sourceEnd: sourceLocation.end, dubStart: dubLocation.start, dubEnd: dubLocation.end, evidenceStatus: 'transcript-only' };
+  const candidates = parsed.findings as Json[];
+  for (const item of candidates) {
+    const category = String(item.category || 'Meaning');
+    const sourceQuote = typeof item.sourceQuote === 'string' ? item.sourceQuote.trim().slice(0, 300) : '';
+    const dubQuote = typeof item.dubQuote === 'string' ? item.dubQuote.trim().slice(0, 300) : '';
+    const backTranslationQuote = typeof item.backTranslationQuote === 'string' ? item.backTranslationQuote.trim().slice(0, 300) : '';
+    if (!hasSupportedTranscriptEvidence({ category, sourceQuote, dubQuote, backTranslationQuote })) {
+      throw new Error(`Gemini returned a transcript finding without sufficient quote evidence for passage ${Number(chunk.id) + 1}.`);
+    }
+    const sourceLocation = sourceQuote ? locateTranscriptQuote(source.segments, sourceQuote, item.sourceStartSegment) : { start: undefined, end: undefined };
+    const dubLocation = dubQuote ? locateTranscriptQuote(dub.segments, dubQuote, item.dubStartSegment) : { start: undefined, end: undefined };
+    if (sourceQuote && !transcriptContainsQuote(chunk.sourceText, sourceQuote)) throw new Error(`Gemini quoted source text that is not present in the reviewed passage ${Number(chunk.id) + 1}.`);
+    if (dubQuote && !transcriptContainsQuote(chunk.dubText, dubQuote)) throw new Error(`Gemini quoted dub text that is not present in the reviewed passage ${Number(chunk.id) + 1}.`);
+    const finding: AudioFinding = { severity: item.severity, title: String(item.title).slice(0, 140), detail: String(item.detail).slice(0, 1000), category, sourceQuote, dubQuote, backTranslationQuote, sourceStart: sourceLocation.start, sourceEnd: sourceLocation.end, dubStart: dubLocation.start, dubEnd: dubLocation.end, evidenceStatus: 'transcript-only' };
     findingsByKey.set(`${finding.title}|${sourceQuote}|${dubQuote}|${finding.sourceStart ?? ''}|${finding.dubStart ?? ''}`.toLowerCase(), finding);
   }
   return { findings: [...findingsByKey.values()], backTranslation };
 }
+function buildAudioReviewPrompt(source: Transcript, dub: Transcript, sourceLanguage: string, targetLanguage: string, clipStart: number, clipEnd: number) {
+  return `You are an audio dubbing QA reviewer. Listen to BOTH complete audio tracks. Track 1 is the original in ${sourceLanguage}; track 2 is the dub in ${targetLanguage}. Compare the spoken meaning in the audio, not just the transcripts. The transcripts help locate dialogue, but audio is the evidence. The two tracks may speak the same idea at different times and in different word order. Match clauses by meaning across the full recordings; report source and dub timestamps independently from each track's beginning. Check changed meanings, omissions, additions, names, numbers, quantities, units, and clearly audible language mixing. Do not judge health advice or nutrition without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not invent errors, quotes, or timestamps. Quote short phrases actually heard in each track. If a phrase is unclear, mark the finding for review rather than silently treating it as correct. Return every distinct concrete mismatch, or an empty findings list if you hear none. JSON only: {"findings":[{"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short issue","detail":"what the source says and what the dub says","sourceQuote":"exact short phrase heard","dubQuote":"exact short phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}\n\nSOURCE TRANSCRIPT SEGMENTS (track times in seconds):\n${formatSegmentsRange(source.segments, clipStart, clipEnd)}\n\nDUB TRANSCRIPT SEGMENTS (track times in seconds):\n${formatSegmentsRange(dub.segments, clipStart, clipEnd)}\n\nFull source transcript: ${source.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dub.transcript.slice(0, 8000)}`;
+}
+
 async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, sourceAudio: CompactAudio, dubAudio: CompactAudio, sourceLanguage: string, targetLanguage: string, modelsUsed: Set<string>, clipStart: number, clipEnd: number): Promise<AudioFinding[]> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is missing for audio review.');
@@ -614,6 +607,7 @@ async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, 
       { type: 'audio', data: dubClip.data, mime_type: dubClip.mime_type },
     ],
   };
+  body.input.splice(0, 2, { type: 'text', text: `${buildAudioReviewPrompt(source, dub, sourceLanguage, targetLanguage, clipStart, clipEnd)}\n\nAlso check whether speech is intelligible, clipped, unnaturally paused or paced, distorted, or masked by noise or music. Flag pronunciation only when it changes meaning or makes speech hard to understand; do not treat harmless accent or voice differences as errors.` });
   const requestBytes = Buffer.byteLength(JSON.stringify(body));
   if (requestBytes > 18 * 1024 * 1024) throw new Error('The two audio tracks are too long for one AI listening review. Use shorter clips (about 20 minutes or less) and analyze the video in parts.');
   const response = await geminiRequest({ ...body, response_format: { type: 'text', mime_type: 'application/json', schema: audioFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 165_000);
@@ -628,8 +622,11 @@ async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, 
   } catch {
     throw new Error('Gemini audio review returned incomplete or invalid JSON.');
   }
-  if (!Array.isArray(parsed.findings)) throw new Error('Gemini audio review returned invalid findings.')
-  const findings = parsed.findings.filter((item: Json) => item?.title && item?.detail && ['critical', 'review', 'info'].includes(item.severity)).map((item: Json): AudioFinding => {
+  if (!Array.isArray(parsed.findings)) throw new Error('Gemini audio review returned invalid findings.');
+  if (parsed.findings.some((item: Json) => !item?.title || !item?.detail || !['critical', 'review', 'info'].includes(item.severity))) {
+    throw new Error('Gemini audio review returned a malformed finding.');
+  }
+  const findings = (parsed.findings as Json[]).map((item: Json): AudioFinding => {
     const sourceRange = Number.isInteger(item.sourceStartSegment)
       ? segmentRange(source.segments, item.sourceStartSegment, item.sourceEndSegment, item.sourceStart != null ? clipStart + Number(item.sourceStart) : undefined, item.sourceEnd != null ? clipStart + Number(item.sourceEnd) : undefined)
       : { start: item.sourceStart != null && Number.isFinite(Number(item.sourceStart)) ? clipStart + Number(item.sourceStart) : undefined, end: item.sourceEnd != null && Number.isFinite(Number(item.sourceEnd)) ? clipStart + Number(item.sourceEnd) : undefined };
@@ -837,7 +834,7 @@ export async function POST(request: Request) {
       checkpoint.videoReviewFindings = [];
       checkpoint.reviewRunId = reviewRunId;
     }
-    if (checkpoint.transcriptReviewPromptVersion !== 1) {
+    if (checkpoint.transcriptReviewPromptVersion !== 2) {
       checkpoint.textReviewComplete = false;
       checkpoint.textReviewAttempted = false;
       checkpoint.textFindings = [];
@@ -846,15 +843,15 @@ export async function POST(request: Request) {
       checkpoint.textBackTranslations = {};
       checkpoint.transcriptReviewModels = [];
       checkpoint.backTranslation = undefined;
-      checkpoint.transcriptReviewPromptVersion = 1;
+      checkpoint.transcriptReviewPromptVersion = 2;
     }
-    if (checkpoint.audioReviewPromptVersion !== 4) {
+    if (checkpoint.audioReviewPromptVersion !== 6) {
       checkpoint.audioReviewComplete = false;
       checkpoint.audioReviewChunks = {};
       checkpoint.audioReviewModels = [];
       checkpoint.audioFindings = [];
       checkpoint.audioReviewChunkCount = undefined;
-      checkpoint.audioReviewPromptVersion = 4;
+      checkpoint.audioReviewPromptVersion = 6;
     }
     if (checkpoint.videoReviewVersion !== 1) {
       checkpoint.videoReviewComplete = false;
@@ -1039,7 +1036,7 @@ export async function POST(request: Request) {
     if (!textFindings.length && transcriptCrossCheckAvailable && (!transcriptReviewer || /lite/i.test(transcriptReviewer))) {
       reviewCoverageWarnings.push('Gemini Flash Lite or an unrecorded reviewer returned no findings. This is not a reliable clean verdict; use a stronger transcript-review model or manually check the report transcripts and audio.');
     }
-    const blockingCoverageWarnings = reviewCoverageWarnings.filter(warning => !warning.startsWith(LITE_CLEAN_REPORT_WARNING));
+    const blockingCoverageWarnings = reviewCoverageWarnings;
     markStage('Finishing the timestamped report');
     updateAnalysisProgress(progressId, stage, 97);
     updateAnalysisProgress(progressId, 'Analysis complete', 100, 'complete');

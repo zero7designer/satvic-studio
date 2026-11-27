@@ -320,46 +320,6 @@ function formatClock(seconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 }
 
-async function sliceCompactAudio(audio: CompactAudio, startSeconds: number, durationSeconds: number) {
-  if (!ffmpegPath) throw new Error('The bundled FFmpeg executable is unavailable for audio review.');
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'satvic-audio-chunk-'));
-  const inputPath = path.join(directory, 'input.mp3');
-  const outputPath = path.join(directory, 'chunk.mp3');
-  try {
-    await writeFile(inputPath, Buffer.from(audio.data, 'base64'));
-    const createSilence = async () => {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(ffmpegPath!, ['-nostdin', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono', '-t', String(durationSeconds), '-ac', '1', '-ar', '24000', '-b:a', '48k', '-f', 'mp3', outputPath], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
-        let diagnostic = '';
-        child.stderr?.on('data', chunk => { diagnostic = `${diagnostic}${chunk}`.slice(-1200); });
-        child.once('error', reject);
-        child.once('close', code => code === 0 ? resolve() : reject(new Error(`Could not create a silent audio segment. ${diagnostic.trim().split('\n').slice(-2).join(' ')}`)));
-      });
-      return readFile(outputPath);
-    };
-    if (audio.durationSeconds !== undefined && startSeconds >= audio.durationSeconds) {
-      const silence = await createSilence();
-      return { data: silence.toString('base64'), mime_type: 'audio/mp3' };
-    }
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(ffmpegPath!, ['-nostdin', '-y', '-ss', String(startSeconds), '-i', inputPath, '-t', String(durationSeconds), '-map', '0:a:0', '-vn', '-af', 'apad', '-ac', '1', '-ar', '24000', '-b:a', '48k', '-f', 'mp3', outputPath], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
-      let diagnostic = '';
-      child.stderr?.on('data', chunk => { diagnostic = `${diagnostic}${chunk}`.slice(-1200); });
-      child.once('error', reject);
-      child.once('close', code => code === 0 ? resolve() : reject(new Error(`Could not prepare an audio review segment. ${diagnostic.trim().split('\n').slice(-2).join(' ')}`)));
-    });
-    const bytes = await readFile(outputPath);
-    if (!bytes.length) {
-      const silence = await createSilence();
-      if (!silence.length) return null;
-      return { data: silence.toString('base64'), mime_type: 'audio/mp3' };
-    }
-    return { data: bytes.toString('base64'), mime_type: 'audio/mp3' };
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-}
-
 async function transcribeWithSarvam(
   file: File,
   languageCode: string,
@@ -643,17 +603,17 @@ async function geminiAudioReview(sourceInput: Transcript, dubInput: Transcript, 
   const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
   const source: Transcript = { ...sourceInput, transcript: formatSegmentsRange(sourceInput.segments, clipStart, clipEnd) };
   const dub: Transcript = { ...dubInput, transcript: formatSegmentsRange(dubInput.segments, clipStart, clipEnd) };
-  const [sourceClip, dubClip] = await Promise.all([sliceCompactAudio(sourceAudio, clipStart, clipEnd - clipStart), sliceCompactAudio(dubAudio, clipStart, clipEnd - clipStart)]);
-  if (!sourceClip || !dubClip) throw new Error(`Could not create both Gemini audio-review clips for ${clipStart.toFixed(1)}–${clipEnd.toFixed(1)} seconds.`);
+  const sourceClip = sourceAudio;
+  const dubClip = dubAudio;
   const body = {
     model,
     input: [
       { type: 'text', text: `You are reviewing only audio from ${clipStart.toFixed(1)} to ${clipEnd.toFixed(1)} seconds. You are an audio dubbing quality reviewer. You can listen to BOTH attached audio tracks. Track 1 is the original ${sourceLanguage}; track 2 is the finished dub in ${targetLanguage}. Compare the words actually spoken in the audio, not merely the transcripts. The supplied source transcript and dub transcript or SRT help locate speech but may contain omissions or errors; the attached audio itself is authoritative. Independently listen to each audio track and form an internal transcript of the words actually spoken, then compare those words; never treat a matching transcript as proof that the dub audio is correct. Align complete clauses by meaning, not individual words or their position in the sentence. For example, Hindi "मैं लड़का हूँ" means "I am a boy"; do not compare "I am" with "लड़का" as if they were corresponding phrases. Translation word order and natural rewording are not errors. Use surrounding context and narrative order—not just the nearest timestamp—to align translated dialogue when timing differs. The transcript context below includes nearby sentences outside the attached audio clips; use those lines only to match the same idea across languages, never as evidence for a finding. Findings must be audible in the attached clips. Flag a spoken omission, addition, changed number/name/meaning, or other audible mismatch even when the supplied transcripts look equivalent. The timestamped transcripts below help locate speech; audio is the evidence. Find EVERY distinct issue and each separate occurrence; do not stop after one or combine separate times. Check changed meaning, omissions/additions, each quantity and unit, and claims changed from below to above a limit. Flag clear English words or phrases used instead of the selected target language as Language mixing; ignore proper names, brands, and common loanwords. Do not judge health or nutrition safety without a trusted reference. ${targetLanguageReviewNote(targetLanguage)} Do not label a regional accent as wrong just because it differs; only flag if it affects intelligibility or brief requirements. For each issue give start and end seconds relative to the start of this supplied audio clip (the app adds the clip offset), a category, severity (critical/review/info), a plain-English explanation that states what the source says and what the dub says, with short quotes. Only report a mismatch when the source and dub quotes express the same proposition but differ in meaning; if you cannot confidently match them, state the uncertainty instead of pairing unrelated or adjacent sentences. Return the zero-based start/end segment indexes for the closest supplied transcript segments (sourceStartSegment, sourceEndSegment, dubStartSegment, dubEndSegment), or null indexes when no transcript segment is supplied. Use transcript segments as timing anchors when available. Do not invent issues or exact quotes. If audio or transcripts are unclear, state the uncertainty instead of guessing. Output JSON only: {"findings":[ {"severity":"critical|review|info","category":"Meaning|Omission/addition|Numbers/names|Language mixing|Pronunciation/intelligibility|Accent/voice|Pacing/timing|Audio quality|Other","title":"short actionable issue","detail":"what the source says and what the dub says","sourceQuote":"short source phrase","dubQuote":"short target-language phrase heard","sourceStart":0,"sourceEnd":1,"dubStart":0,"dubEnd":1,"sourceStartSegment":0,"sourceEndSegment":0,"dubStartSegment":0,"dubEndSegment":0}]}. If no concrete issue is audible, return {"findings":[]}.\n\nSOURCE TRANSCRIPT CONTEXT (seconds; includes nearby sentences around this clip):\n${formatSegmentsRange(source.segments, Math.max(0, clipStart - 30), clipEnd + 30)}\n\nDUB TRANSCRIPT CONTEXT (seconds; includes nearby sentences around this clip):\n${formatSegmentsRange(dub.segments, Math.max(0, clipStart - 30), clipEnd + 30)}\n\nFull source transcript: ${sourceInput.transcript.slice(0, 8000)}\n\nFull dub transcript: ${dubInput.transcript.slice(0, 8000)}` },
+      { type: 'text', text: 'These are the complete original and dubbed audio tracks, not synchronized 30-second excerpts. Match the same spoken ideas across the full recordings even if they occur at different times. Report source and dub timestamps independently from each track’s beginning, and only cite speech that is audible in its corresponding audio track.' },
       { type: 'audio', data: sourceClip.data, mime_type: sourceClip.mime_type },
       { type: 'audio', data: dubClip.data, mime_type: dubClip.mime_type },
     ],
   };
-  body.input.unshift({ type: 'text', text: 'Voice-casting review: in every chunk, compare the apparent vocal presentation of each audible source speaker with the person voicing that same dialogue in the dub. Explicitly flag clear mismatches such as a masculine-sounding source character voiced by a feminine-sounding dub voice, or two distinct source speakers collapsed into one dub voice. Match dialogue turns by meaning as well as timestamps because translations may shift timing. Report perceived voice presentation, never a real person’s gender. If the match is uncertain, do not guess.' });
   const requestBytes = Buffer.byteLength(JSON.stringify(body));
   if (requestBytes > 18 * 1024 * 1024) throw new Error('The two audio tracks are too long for one AI listening review. Use shorter clips (about 20 minutes or less) and analyze the video in parts.');
   const response = await geminiRequest({ ...body, response_format: { type: 'text', mime_type: 'application/json', schema: audioFindingsSchema }, generation_config: { max_output_tokens: 6144 } }, key, 165_000);
@@ -888,13 +848,13 @@ export async function POST(request: Request) {
       checkpoint.backTranslation = undefined;
       checkpoint.transcriptReviewPromptVersion = 1;
     }
-    if (checkpoint.audioReviewPromptVersion !== 3) {
+    if (checkpoint.audioReviewPromptVersion !== 4) {
       checkpoint.audioReviewComplete = false;
       checkpoint.audioReviewChunks = {};
       checkpoint.audioReviewModels = [];
       checkpoint.audioFindings = [];
       checkpoint.audioReviewChunkCount = undefined;
-      checkpoint.audioReviewPromptVersion = 3;
+      checkpoint.audioReviewPromptVersion = 4;
     }
     if (checkpoint.videoReviewVersion !== 1) {
       checkpoint.videoReviewComplete = false;
@@ -1016,15 +976,14 @@ export async function POST(request: Request) {
       await persistCheckpoint();
     };
     const runAudioReview = async (sourceTranscript: Transcript, dubTranscript: Transcript) => {
-      const chunkSeconds = 30;
       const duration = Math.max(
         sourceAudio.durationSeconds || 0,
         dubAudio.durationSeconds || 0,
         sourceTranscript.segments[sourceTranscript.segments.length - 1]?.end || 0,
         dubTranscript.segments[dubTranscript.segments.length - 1]?.end || 0,
       );
-      if (!duration) throw new Error('Transcript or subtitle timing data is missing, so audio QA cannot be split into resumable checkpoints.');
-      const chunkCount = Math.ceil(duration / chunkSeconds);
+      if (!duration) throw new Error('Audio duration could not be determined for the full-track QA review.');
+      const chunkCount = 1;
       if (checkpoint.audioReviewComplete && !checkpoint.audioReviewModels?.length) {
         checkpoint.audioReviewComplete = false;
       }
@@ -1036,8 +995,8 @@ export async function POST(request: Request) {
         const chunkKey = String(index);
         const hasFindings = Object.prototype.hasOwnProperty.call(checkpoint.audioReviewChunks, chunkKey);
         if (hasFindings) continue;
-        const start = index * chunkSeconds;
-        const end = Math.min(duration, start + chunkSeconds);
+        const start = 0;
+        const end = duration;
         markStage(`Gemini listening review ${index + 1}/${chunkCount}`);
         updateAnalysisProgress(progressId, stage, Math.min(95, 82 + Math.floor((index / chunkCount) * 12)));
         const findings = await geminiAudioReview(sourceTranscript, dubTranscript, sourceAudio, dubAudio, sourceLanguage, targetLanguage, audioModelsUsed, start, end);

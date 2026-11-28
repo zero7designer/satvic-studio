@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, Youtube } from 'lucide-react';
+import { Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, UserRound, Youtube } from 'lucide-react';
 
 export type IncomingVideoRequest = {
   id: string;
@@ -91,7 +91,6 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
           {refreshing ? <LoaderCircle size={15} className="spin"/> : <RefreshCw size={15}/>} Refresh
         </button>
       </header>
-      <p className="workflow-overview-caption">{selectedDate ? `Active ${videoType === 'short' ? 'Short-form' : 'Long-form'} requests submitted ${new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}.` : `Only active ${videoType === 'short' ? 'Short-form' : 'Long-form'} requests are shown here.`}</p>
       {loading ? <div className="incoming-video-state"><LoaderCircle size={16} className="spin"/> Loading requests…</div>
         : <>{error && <div className="incoming-video-error" role="alert">{error}</div>}
           {visibleRequests.length === 0 ? error ? null : <div className="incoming-video-empty"><span><Clock3 size={17}/></span><div><b>{selectedDate ? 'No new requests on this date' : `No active ${videoType === 'short' ? 'Short-form' : 'Long-form'} requests`}</b><small>New Video Manager submissions will appear here until completed.</small></div></div>
@@ -110,18 +109,16 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                     </button>}
                   </div>
                 </div>
-                <div className="incoming-video-details">
-                  <div className="incoming-video-requester">
-                    <span className="incoming-video-field-label">Requested by</span>
-                    <b>{request.submitter_name}</b>
-                    <small>{request.submitter_email}</small>
-                  </div>
-                  <div className="incoming-video-language-group">
-                    <span className="incoming-video-field-label">Target languages</span>
-                    <div className="incoming-video-languages">{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
-                  </div>
+                <div className="incoming-video-meta">
+                  <span className="incoming-video-requester" title={request.submitter_email} aria-label={`Requested by ${request.submitter_name}, email ${request.submitter_email}`}>
+                    <UserRound size={14}/>{request.submitter_name}
+                  </span>
+                  <small className="incoming-video-date"><Clock3 size={13}/><span>{new Date(request.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></small>
                 </div>
-                <small className="incoming-video-date"><Clock3 size={13}/><span>Submitted {new Date(request.created_at).toLocaleString()}</span></small>
+                <div className="incoming-video-language-row">
+                  <span>Languages</span>
+                  <div className="incoming-video-languages" aria-label="Target languages">{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
+                </div>
               </div>
             </article>)}</div>}
         </>}

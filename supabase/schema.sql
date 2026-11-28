@@ -122,11 +122,17 @@ create table if not exists public.qa_folders (
   name text not null check (char_length(name) between 1 and 80),
   video_type text check (video_type in ('short', 'long')),
   is_shared boolean not null default false,
+  source_url text check (source_url is null or source_url ~ '^https://'),
+  target_languages text[] check (target_languages is null or cardinality(target_languages) between 1 and 12),
+  video_manager_request_id uuid unique references public.video_manager_requests(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (id, user_id)
 );
 alter table public.qa_folders add column if not exists video_type text check (video_type in ('short', 'long'));
 alter table public.qa_folders add column if not exists is_shared boolean not null default false;
+alter table public.qa_folders add column if not exists source_url text check (source_url is null or source_url ~ '^https://');
+alter table public.qa_folders add column if not exists target_languages text[] check (target_languages is null or cardinality(target_languages) between 1 and 12);
+alter table public.qa_folders add column if not exists video_manager_request_id uuid unique references public.video_manager_requests(id) on delete set null;
 update public.qa_folders set video_type = 'short' where video_type is null;
 alter table public.qa_jobs add column if not exists video_type text check (video_type in ('short', 'long'));
 update public.qa_jobs jobs set video_type = folders.video_type
@@ -168,4 +174,91 @@ create policy "Users can read own and shared QA jobs" on public.qa_jobs for sele
     )
   );
 create index if not exists qa_jobs_folder_user_created_idx on public.qa_jobs (user_id, folder_id, created_at desc);
+
+create or replace function public.start_video_manager_request(p_request_id uuid, p_manager_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  request_row public.video_manager_requests%rowtype;
+  folder_row public.qa_folders%rowtype;
+  base_name text;
+  folder_name text;
+  suffix text;
+  suffix_number integer := 1;
+begin
+  if not exists (
+    select 1 from public.profiles
+    where user_id = p_manager_id and role = 'Video Dubbing Manager'
+  ) then
+    raise exception 'Only Video Dubbing Managers can start requests.' using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_manager_id::text)::bigint);
+
+  select * into request_row
+  from public.video_manager_requests
+  where id = p_request_id
+  for update;
+
+  if not found then
+    raise exception 'Video request not found.' using errcode = 'P0002';
+  end if;
+
+  if request_row.status = 'in_progress' then
+    select * into folder_row
+    from public.qa_folders
+    where video_manager_request_id = request_row.id;
+    if found then
+      if folder_row.user_id <> p_manager_id then
+        raise exception 'This request is already assigned to another manager.' using errcode = '40001';
+      end if;
+      return to_jsonb(folder_row);
+    end if;
+  end if;
+
+  if request_row.status <> 'pending' then
+    raise exception 'Video request is no longer pending.' using errcode = '40001';
+  end if;
+
+  base_name := left(request_row.project_name, 80);
+  folder_name := base_name;
+  while exists (
+    select 1 from public.qa_folders
+    where user_id = p_manager_id and lower(name) = lower(folder_name)
+  ) loop
+    suffix_number := suffix_number + 1;
+    suffix := format(' (%s)', suffix_number);
+    folder_name := left(base_name, 80 - char_length(suffix)) || suffix;
+  end loop;
+
+  insert into public.qa_folders (
+    user_id,
+    name,
+    video_type,
+    source_url,
+    target_languages,
+    video_manager_request_id
+  ) values (
+    p_manager_id,
+    folder_name,
+    request_row.video_type,
+    request_row.source_url,
+    request_row.target_languages,
+    request_row.id
+  )
+  returning * into folder_row;
+
+  update public.video_manager_requests
+  set status = 'in_progress'
+  where id = request_row.id;
+
+  return to_jsonb(folder_row);
+end;
+$$;
+
+revoke all on function public.start_video_manager_request(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.start_video_manager_request(uuid, uuid) to service_role;
 notify pgrst, 'reload schema';

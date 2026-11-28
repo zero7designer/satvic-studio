@@ -86,7 +86,19 @@ export async function PATCH(request: Request) {
     }
 
     const admin = createAdminClient();
-    const previousStatus = body.status === 'in_progress' ? 'pending' : 'in_progress';
+    if (body.status === 'in_progress') {
+      const { data: folder, error } = await admin.rpc('start_video_manager_request', {
+        p_request_id: id,
+        p_manager_id: account.user.id,
+      });
+      if (error?.code === 'P0002') return Response.json({ error: 'This request could not be found.' }, { status: 404 });
+      if (error?.code === '40001') return Response.json({ error: 'This request has already changed. Refresh the queue and try again.' }, { status: 409 });
+      if (error) throw error;
+      if (!folder || typeof folder !== 'object') throw new Error('The project folder could not be created.');
+      return Response.json({ request: { id, status: 'in_progress' }, folder: { ...folder, is_owner: true } }, { headers: { 'cache-control': 'no-store' } });
+    }
+
+    const previousStatus = 'in_progress';
     const { data, error } = await admin.from('video_manager_requests')
       .update({ status: body.status })
       .eq('id', id)

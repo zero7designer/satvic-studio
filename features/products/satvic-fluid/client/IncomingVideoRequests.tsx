@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, UserRound, Youtube } from 'lucide-react';
+import { Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, Youtube } from 'lucide-react';
 
 export type IncomingVideoRequest = {
   id: string;
@@ -15,10 +15,25 @@ export type IncomingVideoRequest = {
   created_at: string;
 };
 
+export type IncomingVideoProjectFolder = {
+  id: string;
+  name: string;
+  created_at: string;
+  video_type: 'short' | 'long';
+  feedback_form_url: string | null;
+  feedback_sheet_url: string | null;
+  is_shared: boolean;
+  is_owner: boolean;
+  source_url: string;
+  target_languages: string[];
+  video_manager_request_id: string;
+};
+
 type Props = {
   videoType: 'short' | 'long';
   selectedDate: string | null;
   onRequestsChange?: (requests: IncomingVideoRequest[]) => void;
+  onFolderCreated?: (folder: IncomingVideoProjectFolder) => void;
 };
 
 function requestDateKey(value: string) {
@@ -26,7 +41,7 @@ function requestDateKey(value: string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export default function IncomingVideoRequests({ videoType, selectedDate, onRequestsChange }: Props) {
+export default function IncomingVideoRequests({ videoType, selectedDate, onRequestsChange, onFolderCreated }: Props) {
   const [requests, setRequests] = useState<IncomingVideoRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -66,6 +81,10 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not update this request.');
+      if (status === 'in_progress') {
+        if (!body.folder) throw new Error('The request started, but its project folder could not be loaded. Refresh the workspace.');
+        onFolderCreated?.(body.folder as IncomingVideoProjectFolder);
+      }
       setRequests(current => current.map(item => item.id === request.id ? { ...item, status } : item));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Could not update this request.');
@@ -95,13 +114,15 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
         : <>{error && <div className="incoming-video-error" role="alert">{error}</div>}
           {visibleRequests.length === 0 ? error ? null : <div className="incoming-video-empty"><span><Clock3 size={17}/></span><div><b>{selectedDate ? 'No new requests on this date' : `No active ${videoType === 'short' ? 'Short-form' : 'Long-form'} requests`}</b><small>New Video Manager submissions will appear here until completed.</small></div></div>
             : <div className="incoming-video-list">{visibleRequests.map(request => <article className="incoming-video-card" key={request.id}>
-              <div className={`incoming-video-format ${request.video_type}`}>
-                {request.video_type === 'short' ? <span className="video-platform-pair"><Instagram size={14}/><Youtube size={14}/></span> : <Youtube size={18}/>}
-                <small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small>
-              </div>
               <div className="incoming-video-main">
                 <div className="incoming-video-card-heading">
-                  <div className="incoming-video-title-row"><h3>{request.project_name}</h3><span className={`incoming-video-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
+                  <div className="incoming-video-title-group">
+                    <div className={`incoming-video-format ${request.video_type}`}>
+                      {request.video_type === 'short' ? <span className="video-platform-pair"><Instagram size={14}/><Youtube size={14}/></span> : <Youtube size={18}/>}
+                      <small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small>
+                    </div>
+                    <div className="incoming-video-title-row"><h3>{request.project_name}</h3><span className={`incoming-video-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
+                  </div>
                   <div className="incoming-video-actions">
                     <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={15}/></a>
                     {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
@@ -109,16 +130,11 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                     </button>}
                   </div>
                 </div>
-                <div className="incoming-video-meta">
-                  <span className="incoming-video-requester" title={request.submitter_email} aria-label={`Requested by ${request.submitter_name}, email ${request.submitter_email}`}>
-                    <UserRound size={14}/>{request.submitter_name}
-                  </span>
-                  <small className="incoming-video-date"><Clock3 size={13}/><span>{new Date(request.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></small>
-                </div>
                 <div className="incoming-video-language-row">
                   <span>Languages</span>
                   <div className="incoming-video-languages" aria-label="Target languages">{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
                 </div>
+                <small className="incoming-video-date"><Clock3 size={13}/><span>{new Date(request.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></small>
               </div>
             </article>)}</div>}
         </>}

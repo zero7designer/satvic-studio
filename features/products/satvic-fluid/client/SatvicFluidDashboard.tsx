@@ -7,7 +7,7 @@ import { uploadPresigned } from '@vercel/blob/client';
 import ProductDashboardShell from '@/features/dashboard/client/ProductDashboardShell';
 import IndiaCommunityMapCard, { languagesForIndiaState } from '@/features/dashboard/client/IndiaCommunityMapCard';
 import FeedbackCalendarCard from '@/features/dashboard/client/FeedbackCalendarCard';
-import IncomingVideoRequests, { type IncomingVideoRequest } from '@/features/products/satvic-fluid/client/IncomingVideoRequests';
+import IncomingVideoRequests, { type IncomingVideoProjectFolder, type IncomingVideoRequest } from '@/features/products/satvic-fluid/client/IncomingVideoRequests';
 import {
   Activity, AlertCircle, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, CalendarDays, Calculator, Check, CheckCheck,
   ChevronLeft, ChevronRight, Clock3, FileAudio, FileText, ExternalLink, Folder, FolderPlus, FolderOpen, Headphones, Languages,
@@ -19,7 +19,7 @@ import { qaJobProjectStatus, qaProjectStatus } from '@/lib/qa/review-status';
 type Issue = { title: string; detail: string; time?: string; source?: string; severity: 'critical' | 'review' | 'info'; category?: string; sourceStart?: number; sourceEnd?: number; dubStart?: number; dubEnd?: number; evidenceStatus?: 'cross-checked' | 'audio-only' | 'transcript-only' | 'visual-only'; sourceQuote?: string; dubQuote?: string; backTranslationQuote?: string };
 type Project = { title: string; source: string; target: string; status: 'Needs review' | 'In progress' | 'Ready' | 'Failed' | 'Example'; issues: number; date: string; createdAt?: string; updatedAt?: string; videoType?: VideoFormType | null; color: string; initials: string; jobId?: string; folderId?: string; completedSeconds?: number; sourceDurationSeconds?: number; workflowMode?: 'sarvam' | 'review'; errorMessage?: string; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; dubbedAvailable?: boolean; isExample?: boolean; readOnly?: boolean };
 type VideoFormType = 'short' | 'long';
-type ProjectFolder = { id: string; name: string; created_at: string; video_type: VideoFormType | null; feedback_form_url?: string | null; feedback_sheet_url?: string | null; is_shared: boolean; is_owner: boolean };
+type ProjectFolder = { id: string; name: string; created_at: string; video_type: VideoFormType | null; feedback_form_url?: string | null; feedback_sheet_url?: string | null; is_shared: boolean; is_owner: boolean; source_url?: string | null; target_languages?: string[] | null; video_manager_request_id?: string | null };
 type FolderProgress = { total: number; dubbed: number; qaReports: number; inProgress: number; needsReview: number; failed: number };
 type TranscriptSegment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type AnalysisReport = { project: string; sourceLanguage: string; targetLanguage: string; createdAt: string; originalTranscript: string; dubbedTranscript: string; dubSubtitleTranscript?: string; dubSubtitleSegments?: TranscriptSegment[]; backTranslation: string; findings: Issue[]; disclaimer: string; originalSegments: TranscriptSegment[]; dubbedSegments: TranscriptSegment[]; timestampsAvailable: boolean; transcriptionEngine: string; semanticReviewEngine: string | null; transcriptCrossCheckAvailable: boolean; transcriptCrossCheckError?: string | null; audioReviewCompleted?: boolean; audioReviewEngine?: string; audioReviewFindingCount?: number; audioReviewChunkCount?: number; videoReviewCompleted?: boolean; videoReviewEngine?: string; videoReviewFindingCount?: number; transcriptReviewChunkCount?: number; reviewCoverageWarnings?: string[]; reviewComplete?: boolean; generatedBySarvam?: boolean; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; originalB2Key?: string | null; dubbedB2Key?: string | null; reportB2Key?: string | null };
@@ -1568,7 +1568,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             </section>
           </section>}
           {!costEstimatePage && workflowDashboardOpen && <section className="welcome-row">
-            <div><h1>{activeFolderId ? activeFolder?.name : isSarvamWorkflow ? 'Create a dub in your target language, then review it' : 'Review your existing dub against its original'}</h1>{activeFolderId && <p className="welcome-subtitle">Dub videos and QA findings saved in this project.</p>}</div>
+            <div><h1>{activeFolderId ? activeFolder?.name : isSarvamWorkflow ? 'Create a dub in your target language, then review it' : 'Review your existing dub against its original'}</h1>{activeFolderId && <><p className="welcome-subtitle">Dub videos and QA findings saved in this project.</p>{activeFolder?.source_url && <div className="folder-request-details"><a href={activeFolder.source_url} target="_blank" rel="noopener noreferrer">Open requested source <ExternalLink size={13}/></a>{activeFolder.target_languages?.length ? <div className="folder-request-languages"><span>Requested languages</span>{activeFolder.target_languages.map(language => <span className="folder-request-language" key={language}>{language}</span>)}</div> : null}</div>}</>}</div>
             <div className="welcome-actions">
               {activeFolderId && <>
                 <button type="button" className="folder-back-button" onClick={()=>{setActiveFolderId(null);setActiveTab('All projects')}}><ArrowLeft size={15}/> Back to projects</button>
@@ -1587,7 +1587,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           </section>}
 
       {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <section className="workflow-overview-grid" aria-label={`${selectedVideoType === 'short' ? 'Short-form' : 'Long-form'} incoming video requests`}>
-        <IncomingVideoRequests videoType={selectedVideoType} selectedDate={selectedTaskDate} onRequestsChange={setIncomingRequests}/>
+        <IncomingVideoRequests videoType={selectedVideoType} selectedDate={selectedTaskDate} onRequestsChange={setIncomingRequests} onFolderCreated={(folder: IncomingVideoProjectFolder) => setFolders(current => [...current.filter(item => item.id !== folder.id), folder])}/>
 
         <section className="workflow-calendar-panel panel" aria-label="Filter incoming requests by date">
           <header className="workflow-overview-heading">

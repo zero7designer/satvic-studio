@@ -1,7 +1,7 @@
 import { createClient } from '../../../lib/supabase/server';
 
 export const runtime = 'nodejs';
-const folderFields = 'id, name, created_at, video_type, feedback_form_url, feedback_sheet_url, is_shared';
+const folderFields = 'id, name, created_at, video_type, feedback_form_url, feedback_sheet_url, is_shared, source_url, target_languages, video_manager_request_id';
 
 export async function GET() {
   try {

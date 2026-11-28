@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: 'Satvic Studio | Multilingual Video QA',
   description: 'A private workspace for comparing dubbed audio and reviewing multilingual video quality.',
   icons: {
-    icon: '/sarvamlogo.svg',
+    icon: 'https://satvicmovement.org/images/favicon.png',
   },
 };
 

@@ -77,7 +77,7 @@ export default function IncomingVideoRequests() {
           {requests.length === 0 ? error ? null : <div className="incoming-video-empty"><span><Clock3 size={17}/></span><div><b>No incoming requests yet</b><small>New Video Manager submissions will show here.</small></div></div>
             : <div className="incoming-video-list">{requests.map(request => <article className="incoming-video-card" key={request.id}>
               <div className={`incoming-video-format ${request.video_type}`}>
-                {request.video_type === 'short' ? <Instagram size={17}/> : <Youtube size={18}/>}
+                {request.video_type === 'short' ? <span className="video-platform-pair"><Instagram size={14}/><Youtube size={14}/></span> : <Youtube size={18}/>}
                 <small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small>
               </div>
               <div className="incoming-video-main">

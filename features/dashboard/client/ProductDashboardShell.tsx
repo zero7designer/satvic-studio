@@ -330,7 +330,7 @@ export default function ProductDashboardShell({
             </button>
             {videoTypes.length > 0 && expanded && <div className="nav-subnav" aria-label={`${feature.label} video formats`}>
               {videoTypes.map(videoType => <button type="button" className={`nav-subitem${activeVideoType === videoType ? ' active' : ''}`} key={videoType} onClick={() => chooseVideoType(feature, videoType)}>
-                <span className={`nav-subitem-icon ${videoType}`}>{videoType === 'short' ? <Instagram size={14}/> : <Youtube size={15}/>}</span>
+                <span className={`nav-subitem-icon ${videoType}`}>{videoType === 'short' ? <span className="video-platform-pair"><Instagram size={12}/><Youtube size={12}/></span> : <Youtube size={15}/>}</span>
                 <span>{videoType === 'short' ? 'Short-form' : 'Long-form'}<small>{videoType === 'short' ? 'Instagram Reels · YouTube Shorts' : 'YouTube video'}</small></span>
               </button>)}
             </div>}

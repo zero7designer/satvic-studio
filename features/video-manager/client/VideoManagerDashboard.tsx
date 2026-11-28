@@ -150,7 +150,7 @@ export default function VideoManagerDashboard({
                 <legend>Video format</legend>
                 <div className="video-manager-format-options">
                   <button type="button" className={`video-manager-format-option${videoType === 'short' ? ' selected' : ''}`} aria-pressed={videoType === 'short'} onClick={() => setVideoType('short')}>
-                    <span className="video-manager-format-icon short"><Instagram size={18}/></span>
+                    <span className="video-manager-format-icon short"><span className="video-platform-pair"><Instagram size={15}/><Youtube size={15}/></span></span>
                     <span><b>Short-form</b><small>Reels and Shorts</small><span className="folder-platforms"><i className="folder-platform-badge instagram"><Instagram size={12}/> Instagram Reels</i><i className="folder-platform-badge youtube"><Youtube size={12}/> YouTube Shorts</i></span></span>
                     {videoType === 'short' && <Check size={17}/>}
                   </button>
@@ -212,15 +212,23 @@ export default function VideoManagerDashboard({
             {requestsError && <p className="video-manager-list-error" role="alert">{requestsError}</p>}
             {requestsLoading ? <div className="video-manager-list-state"><LoaderCircle size={18} className="spin"/> Loading your requests…</div>
               : filteredRequests.length === 0 ? <div className="video-manager-list-empty"><span><Languages size={20}/></span><b>{requests.length ? 'No requests in this status' : 'No video requests yet'}</b><small>{requests.length ? 'Choose another filter to see your requests.' : 'Create a dub job to see its progress here.'}</small></div>
-                : <div className="video-manager-request-list">{filteredRequests.map(request => <article className="video-manager-request-row" key={request.id}>
-                  <span className={`video-manager-request-format ${request.video_type}`}>{request.video_type === 'short' ? <Instagram size={17}/> : <Youtube size={18}/>}<small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small></span>
-                  <div className="video-manager-request-info">
-                    <div className="video-manager-request-title"><h3>{request.project_name}</h3><span className={`video-manager-request-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
-                    <p>{request.target_languages.join(' · ')}</p>
-                    <small>{new Date(request.created_at).toLocaleString()}</small>
-                  </div>
-                  <a className="video-manager-source-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a>
-                </article>)}</div>}
+                : filteredRequests.length > 0 && <div className="video-manager-request-table-wrap">
+                  <table className="video-manager-request-table">
+                    <thead><tr><th scope="col">Name</th><th scope="col">Target languages</th><th scope="col">Submitted</th><th scope="col">Status</th><th scope="col">Source</th></tr></thead>
+                    <tbody>{filteredRequests.map(request => <tr key={request.id}>
+                      <td data-label="Name">
+                        <div className="video-manager-request-name">
+                          <span className={`video-manager-request-format ${request.video_type}`}>{request.video_type === 'short' ? <span className="video-platform-pair"><Instagram size={14}/><Youtube size={14}/></span> : <Youtube size={18}/>}<small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small></span>
+                          <span><b>{request.project_name}</b><small>{request.video_type === 'short' ? 'Instagram Reels · YouTube Shorts' : 'YouTube video'}</small></span>
+                        </div>
+                      </td>
+                      <td data-label="Target languages"><div className="video-manager-request-languages">{request.target_languages.map(language => <span key={language}>{language}</span>)}</div></td>
+                      <td data-label="Submitted" className="video-manager-request-date">{new Date(request.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                      <td data-label="Status"><span className={`video-manager-request-status ${request.status}`}>{request.status.replace('_', ' ')}</span></td>
+                      <td data-label="Source"><a className="video-manager-source-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a></td>
+                    </tr>)}</tbody>
+                  </table>
+                </div>}
           </section>
         </>}
       </div>

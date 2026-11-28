@@ -1588,35 +1588,18 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           <footer className="spotlight-footer"><span><kbd>↵</kbd> {activeFolderId ? 'Open video' : 'Open folder'}</span><span><kbd>ESC</kbd> Close</span><span><kbd>⌘ K</kbd> Search</span></footer>
         </section>
       </div>}
-      {!workflowDashboardOpen && !costEstimatePage && <section className="workflow-dashboard-home" aria-label="Choose dubbing format">
-        {showSarvamGuide && <section className="qa-flow workflow-onboarding" aria-labelledby="workflow-onboarding-title">
+      {!workflowDashboardOpen && !costEstimatePage && showSarvamGuide && <section className="workflow-dashboard-home" aria-label="Getting started">
+        <section className="qa-flow workflow-onboarding" aria-labelledby="workflow-onboarding-title">
           <header className="qa-flow-heading">
-            <div className="workflow-onboarding-title"><span className="qa-flow-brand sarvam"><SarvamLogoMark/></span><div><span className="section-kicker">GETTING STARTED</span><h2 id="workflow-onboarding-title">How to generate a dub with Sarvam</h2><p>Choose your video format below, then follow these four steps to create and review a dub.</p></div></div>
+            <div className="workflow-onboarding-title"><span className="qa-flow-brand sarvam"><SarvamLogoMark/></span><div><span className="section-kicker">GETTING STARTED</span><h2 id="workflow-onboarding-title">How to generate a dub with Sarvam</h2><p>Choose a format from the navigation, then follow these four steps to create and review a dub.</p></div></div>
             <span className="qa-flow-time"><Clock3 size={14}/> 4 simple steps</span>
           </header>
           <ol className="qa-flow-steps">
-            <li><span className="qa-step-number">01</span><span><b>Choose a video format</b><p>Select Short-form or Long-form to open its dashboard.</p></span></li>
+            <li><span className="qa-step-number">01</span><span><b>Choose a video format</b><p>Select Short-form or Long-form from the navigation.</p></span></li>
             <li><span className="qa-step-number">02</span><span><b>Add your source video</b><p>Choose a project folder and upload the original video.</p></span></li>
             <li><span className="qa-step-number">03</span><span><b>Generate with Sarvam</b><p>Select the target language and create the dubbed video.</p></span></li>
             <li><span className="qa-step-number">04</span><span><b>Review the result</b><p>Check the QA report and review any flagged moments.</p></span></li>
           </ol>
-        </section>}
-        <section className="workflow-format-selection panel" aria-labelledby="workflow-format-title">
-          <header><span className="section-kicker">CREATE A DUB</span><h2 id="workflow-format-title">Choose your video format</h2><p>{isSarvamWorkflow ? 'Select a format to open its dubbing dashboard.' : 'Select a format to open its review dashboard.'}</p></header>
-          <div className="workflow-format-cards">
-            <button type="button" className="workflow-format-card short" onClick={() => { setSelectedVideoType('short'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
-              <span className="workflow-format-card-icon"><span className="video-platform-pair"><Instagram size={18}/><Youtube size={18}/></span></span>
-              <span className="workflow-format-card-copy"><small>SHORT-FORM</small><b>Instagram Reels &amp; YouTube Shorts</b><span>Vertical videos, Reels, and Shorts</span>
-              </span>
-              <ArrowRight size={18}/>
-            </button>
-            <button type="button" className="workflow-format-card long" onClick={() => { setSelectedVideoType('long'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
-              <span className="workflow-format-card-icon"><Youtube size={20}/></span>
-              <span className="workflow-format-card-copy"><small>LONG-FORM</small><b>YouTube videos</b><span>Full-length videos and episodes</span>
-              </span>
-              <ArrowRight size={18}/>
-            </button>
-          </div>
         </section>
       </section>}
           {costEstimatePage && <section className="cost-dashboard-page" aria-label="Cost estimate dashboard">

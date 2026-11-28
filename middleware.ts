@@ -38,7 +38,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'This action is available to Video Dubbing Managers only.' }, { status: 403 });
     }
   }
-  if (user && isAuthPage) return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (user && isAuthPage) {
+    const { data: profile } = await supabase.from('profiles').select('user_id').eq('user_id', user.id).maybeSingle();
+    if (profile) return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
   return response;
 }
 

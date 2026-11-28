@@ -1156,70 +1156,70 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .folder-overview-grid .community-map-filter-note button{border:0;background:transparent;color:#73786f;font:500 10px/1 "Matter";cursor:pointer}
 .app-shell .folder-overview-grid .community-map-filter-note button:hover{color:#355442;text-decoration:underline}
 .app-shell .folder-overview-empty{min-height:370px;border:1px solid #e9ece7;border-radius:16px;background:#fff;box-shadow:0 2px 9px #22251f04}
-.app-shell .feedback-calendar-card{display:flex;min-width:0;min-height:370px;flex-direction:column;padding:18px 19px;border:1px solid #e9ece7;border-radius:16px;background:#fff;box-shadow:0 2px 9px #22251f04}
+.app-shell .feedback-calendar-card{--feedback-accent:var(--studio-accent,#705c99);--feedback-accent-deep:var(--studio-accent-deep,#59467e);--feedback-soft:var(--studio-soft,#f0ecf7);--feedback-line:var(--studio-line,#e9e2f1);display:flex;min-width:0;min-height:370px;flex-direction:column;padding:18px 19px;border:1px solid #e9ece7;border-radius:16px;background:#fff;box-shadow:0 2px 9px #22251f04}
 .app-shell .feedback-card-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .app-shell .feedback-card-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .app-shell .feedback-card-title{display:flex;min-width:0;align-items:center;gap:10px}
-.app-shell .feedback-card-icon{display:grid;width:34px;height:34px;flex:none;place-items:center;border-radius:10px;background:#f1edf8;color:#8162a9}
+.app-shell .feedback-card-icon{display:grid;width:34px;height:34px;flex:none;place-items:center;border-radius:10px;background:var(--feedback-soft);color:var(--feedback-accent)}
 .app-shell .feedback-card-title>div{display:grid;gap:3px}
 .app-shell .feedback-card-kicker{color:#90938b;font:600 8px/1.2 "Matter";letter-spacing:1.05px}
 .app-shell .feedback-card-title h2{margin:0;color:#30342f;font:500 15px/1.2 "Matter"}
-.app-shell .feedback-response-count{padding:6px 9px;border-radius:20px;background:#f2eef9;color:#73559a;font:500 9px "Matter";white-space:nowrap}
-.app-shell .feedback-form-link{display:inline-flex;min-height:29px;align-items:center;justify-content:center;gap:5px;padding:0 8px;border:1px solid #e5ddee;border-radius:8px;background:#faf8fd;color:#705292;font:500 8px "Matter";text-decoration:none;white-space:nowrap}
-.app-shell .feedback-form-link:hover{border-color:#cbb8df;background:#f3eef9}
+.app-shell .feedback-response-count{padding:6px 9px;border-radius:20px;background:var(--feedback-soft);color:var(--feedback-deep);font:500 9px "Matter";white-space:nowrap}
+.app-shell .feedback-form-link{display:inline-flex;min-height:29px;align-items:center;justify-content:center;gap:5px;padding:0 8px;border:1px solid var(--feedback-line);border-radius:8px;background:var(--feedback-soft);color:var(--feedback-deep);font:500 8px "Matter";text-decoration:none;white-space:nowrap}
+.app-shell .feedback-form-link:hover{border-color:var(--feedback-accent);background:var(--feedback-soft)}
 .app-shell .feedback-calendar-toolbar{display:flex;align-items:center;justify-content:space-between;margin:20px 0 9px;padding:0 3px}
 .app-shell .feedback-calendar-toolbar>b{color:#393d37;font:500 12px "Matter"}
 .app-shell .feedback-calendar-toolbar>button,.app-shell .feedback-back-button{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border:1px solid #e8eae6;border-radius:8px;background:#fff;color:#72786f;cursor:pointer}
-.app-shell .feedback-calendar-toolbar>button:hover,.app-shell .feedback-back-button:hover{border-color:#d3c7e4;background:#faf8fd;color:#705191}
+.app-shell .feedback-calendar-toolbar>button:hover,.app-shell .feedback-back-button:hover{border-color:var(--feedback-accent);background:var(--feedback-soft);color:var(--feedback-deep)}
 .app-shell .feedback-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;align-content:start}
 .app-shell .feedback-weekday{display:grid;height:22px;place-items:center;color:#a0a39c;font:500 8px "Matter"}
 .app-shell .feedback-day-spacer{min-height:34px}
 .app-shell .feedback-day{position:relative;display:flex;min-width:0;min-height:34px;align-items:center;justify-content:center;border:1px solid transparent;border-radius:8px;background:#f8f9f7;color:#5e635b;font:400 10px "Matter";cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
-.app-shell .feedback-day:hover{transform:translateY(-1px);border-color:#ded5eb;background:#f7f3fc}
+.app-shell .feedback-day:hover{transform:translateY(-1px);border-color:var(--feedback-line);background:var(--feedback-soft)}
 .app-shell .feedback-day.today{border-color:#d9dcd6;color:#30342f;font-weight:600}
-.app-shell .feedback-day.has-feedback{border-color:#8e70ba;background:#8665af;color:#fff;font-weight:600;box-shadow:0 3px 8px #8060a62b}
-.app-shell .feedback-day.has-feedback:hover{background:#745295}
-.app-shell .feedback-day>i{position:absolute;top:2px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:7px;background:#fff;color:#735496;font:600 7px/11px "Matter";font-style:normal;text-align:center}
+.app-shell .feedback-day.has-feedback{border-color:var(--feedback-accent);background:var(--feedback-accent);color:#fff;font-weight:600;box-shadow:0 3px 8px var(--studio-shadow,#705c9920)}
+.app-shell .feedback-day.has-feedback:hover{background:var(--feedback-accent-deep)}
+.app-shell .feedback-day>i{position:absolute;top:2px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:7px;background:#fff;color:var(--feedback-deep);font:600 7px/11px "Matter";font-style:normal;text-align:center}
 .app-shell .feedback-calendar-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:12px;color:#898e85}
 .app-shell .feedback-calendar-footer>span{display:flex;align-items:center;gap:6px;font:400 9px "Matter";white-space:nowrap}
-.app-shell .feedback-calendar-footer>span>i{width:8px;height:8px;border-radius:3px;background:#8665af}
+.app-shell .feedback-calendar-footer>span>i{width:8px;height:8px;border-radius:3px;background:var(--feedback-accent)}
 .app-shell .feedback-calendar-footer>small{color:#999e95;font:400 8px "Matter";text-align:right}
 .app-shell .feedback-connect-hint{display:flex;align-items:center;gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid #f0f1ee;color:#969b92;font:400 9px "Matter"}
-.app-shell .feedback-connect-hint svg{flex:none;color:#8c70b1}
+.app-shell .feedback-connect-hint svg{flex:none;color:var(--feedback-accent)}
 .app-shell .feedback-sheet-help{color:#8f958b;font:400 8px/1.45 "Matter"}
 .app-shell .feedback-load-error{align-items:flex-start;color:#a8564f;line-height:1.4}
 .app-shell .feedback-load-error svg{margin-top:1px;color:#a8564f}
-.app-shell .feedback-load-error button{margin-left:auto;border:0;background:transparent;color:#775895;font:500 8px "Matter";cursor:pointer}
+.app-shell .feedback-load-error button{margin-left:auto;border:0;background:transparent;color:var(--feedback-deep);font:500 8px "Matter";cursor:pointer}
 .app-shell .feedback-spin{animation:feedback-spin .9s linear infinite}
 @keyframes feedback-spin{to{transform:rotate(360deg)}}
 .app-shell .feedback-back-button{width:auto;gap:5px;padding:0 8px;font:500 9px "Matter"}
 .app-shell .feedback-form-edit{display:grid;width:27px;height:27px;place-items:center;border:1px solid #e7e9e4;border-radius:8px;background:#fff;color:#777d73;cursor:pointer}
-.app-shell .feedback-form-edit:hover{border-color:#d2c4e1;background:#faf8fd;color:#705292}
-.app-shell .feedback-form-settings{display:grid;gap:10px;margin-top:14px;padding:12px;border:1px solid #e7e0ef;border-radius:10px;background:#fcfbfe}
+.app-shell .feedback-form-edit:hover{border-color:var(--feedback-accent);background:var(--feedback-soft);color:var(--feedback-deep)}
+.app-shell .feedback-form-settings{display:grid;gap:10px;margin-top:14px;padding:12px;border:1px solid var(--feedback-line);border-radius:10px;background:var(--feedback-soft)}
 .app-shell .feedback-form-settings-heading{display:flex;align-items:center;justify-content:space-between;color:#41443e;font:500 10px "Matter"}
 .app-shell .feedback-form-settings-heading button{display:grid;width:24px;height:24px;place-items:center;border:0;border-radius:6px;background:transparent;color:#777d73;cursor:pointer}
 .app-shell .feedback-form-settings>label{display:grid;gap:5px;color:#777d73;font:500 9px "Matter"}
 .app-shell .feedback-form-settings input{width:100%;min-height:34px;padding:0 9px;border:1px solid #e2e4df;border-radius:7px;outline:0;background:#fff;color:#41443e;font:400 9px "Matter"}
-.app-shell .feedback-form-settings input:focus{border-color:#b9a4d0;box-shadow:0 0 0 3px #8d6ab314}
+.app-shell .feedback-form-settings input:focus{border-color:var(--feedback-accent);box-shadow:0 0 0 3px var(--studio-shadow,#705c9920)}
 .app-shell .feedback-form-settings>p{margin:0;color:#b44f48;font:400 9px/1.4 "Matter"}
 .app-shell .feedback-form-settings-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px}
-.app-shell .feedback-form-settings-actions button{min-height:29px;padding:0 10px;border:1px solid #ddd4e8;border-radius:7px;background:#8061a7;color:#fff;font:500 9px "Matter";cursor:pointer}
+.app-shell .feedback-form-settings-actions button{min-height:29px;padding:0 10px;border:1px solid var(--feedback-accent);border-radius:7px;background:var(--feedback-accent);color:#fff;font:500 9px "Matter";cursor:pointer}
 .app-shell .feedback-form-settings-actions button.feedback-remove-form{margin-right:auto;border-color:#e8e9e5;background:#fff;color:#777d73}
 .app-shell .feedback-form-settings-actions button:disabled{opacity:.55;cursor:wait}
 .app-shell .feedback-day-view{display:flex;min-height:0;flex:1;flex-direction:column;margin-top:16px}
 .app-shell .feedback-day-heading h3{margin:5px 0 3px;color:#343832;font:500 16px "Matter"}
 .app-shell .feedback-day-heading p{margin:0;color:#898e85;font:400 9px "Matter"}
 .app-shell .feedback-entry-list{display:grid;gap:8px;overflow:auto;margin-top:12px;padding-right:3px}
-.app-shell .feedback-entry{padding:11px;border:1px solid #ebe7f1;border-radius:10px;background:#fcfbfe}
-.app-shell .feedback-entry-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px;margin-bottom:10px;color:#7f688f;font:500 10px "Matter"}
+.app-shell .feedback-entry{padding:11px;border:1px solid var(--feedback-line);border-radius:10px;background:var(--feedback-soft)}
+.app-shell .feedback-entry-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px;margin-bottom:10px;color:var(--feedback-deep);font:500 10px "Matter"}
 .app-shell .feedback-entry-meta>span{display:flex;align-items:center;gap:4px}
 .app-shell .feedback-entry-field{display:grid;gap:3px;margin-top:7px}
 .app-shell .feedback-entry-field small,.app-shell .feedback-respondent{color:#858a81;font:400 9px "Matter"}
 .app-shell .feedback-entry-field b{color:#41453f;font:500 12px/1.45 "Matter";overflow-wrap:anywhere}
 .app-shell .feedback-entry-note{margin:8px 0 0;color:#6e746b;font:400 10px/1.5 "Matter";overflow-wrap:anywhere}
-.app-shell .feedback-entry-actions{display:flex;justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid #eeeaf3}
-.app-shell .feedback-entry-actions button{display:inline-flex;min-height:32px;align-items:center;justify-content:center;gap:6px;padding:0 11px;border:1px solid #dfd5eb;border-radius:8px;background:#fff;color:#70528e;font:500 10px "Matter";cursor:pointer;transition:background .15s,border-color .15s}
-.app-shell .feedback-entry-actions button:hover{border-color:#c8b5dc;background:#f7f3fa}
+.app-shell .feedback-entry-actions{display:flex;justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid var(--feedback-line)}
+.app-shell .feedback-entry-actions button{display:inline-flex;min-height:32px;align-items:center;justify-content:center;gap:6px;padding:0 11px;border:1px solid var(--feedback-line);border-radius:8px;background:var(--feedback-soft);color:var(--feedback-deep);font:500 10px "Matter";cursor:pointer;transition:background .15s,border-color .15s}
+.app-shell .feedback-entry-actions button:hover{border-color:var(--feedback-accent);background:var(--feedback-soft)}
 .app-shell .feedback-entry-actions button:disabled{opacity:.5;cursor:not-allowed}
 .app-shell .feedback-action-error{margin:8px 0;padding:9px 11px;border:1px solid #ead7d4;border-radius:8px;background:#fff8f7;color:#934f48;font:400 9px/1.4 "Matter"}
 .app-shell .feedback-respondent{display:block;margin-top:9px}

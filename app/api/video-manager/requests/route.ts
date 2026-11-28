@@ -55,13 +55,31 @@ export async function PATCH(request: Request) {
     }
     const account = await getAccount();
     if ('response' in account) return account.response;
-    if (account.profile.role !== 'Video Dubbing Manager') {
-      return Response.json({ error: 'Only Video Dubbing Managers can update request status.' }, { status: 403 });
-    }
-    const body = await request.json().catch(() => null) as { id?: unknown; status?: unknown } | null;
+    const body = await request.json().catch(() => null) as { id?: unknown; status?: unknown; action?: unknown } | null;
     const id = typeof body?.id === 'string' ? body.id : '';
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
       return Response.json({ error: 'Choose a valid video request.' }, { status: 400 });
+    }
+
+    if (body && 'action' in body && body.action === 'cancel') {
+      if (account.profile.role !== 'Video Manager') {
+        return Response.json({ error: 'Only the Video Manager can cancel their requests.' }, { status: 403 });
+      }
+      const admin = createAdminClient();
+      const { data, error } = await admin.from('video_manager_requests')
+        .update({ status: 'cancelled' })
+        .eq('id', id)
+        .eq('user_id', account.user.id)
+        .in('status', ['pending', 'in_progress'])
+        .select('id,status')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return Response.json({ error: 'This request can no longer be cancelled. Refresh your requests and try again.' }, { status: 409 });
+      return Response.json({ request: data }, { headers: { 'cache-control': 'no-store' } });
+    }
+
+    if (account.profile.role !== 'Video Dubbing Manager') {
+      return Response.json({ error: 'Only Video Dubbing Managers can update request status.' }, { status: 403 });
     }
     if (body?.status !== 'in_progress' && body?.status !== 'completed') {
       return Response.json({ error: 'Choose an available request status.' }, { status: 400 });
@@ -80,6 +98,39 @@ export async function PATCH(request: Request) {
     return Response.json({ request: data }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not update the request status.';
+    console.error(`[api/video-manager/requests] ${message}`);
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!isSameOrigin(request)) {
+      return Response.json({ error: 'Delete requests from Satvic Studio.' }, { status: 403 });
+    }
+    const account = await getAccount();
+    if ('response' in account) return account.response;
+    if (account.profile.role !== 'Video Manager') {
+      return Response.json({ error: 'Only the Video Manager can delete their requests.' }, { status: 403 });
+    }
+    const body = await request.json().catch(() => null) as { id?: unknown } | null;
+    const id = typeof body?.id === 'string' ? body.id : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return Response.json({ error: 'Choose a valid video request.' }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.from('video_manager_requests')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', account.user.id)
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return Response.json({ error: 'This request could not be found. Refresh your requests and try again.' }, { status: 404 });
+    return Response.json({ request: data }, { headers: { 'cache-control': 'no-store' } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not delete the video request.';
     console.error(`[api/video-manager/requests] ${message}`);
     return Response.json({ error: message }, { status: 500 });
   }

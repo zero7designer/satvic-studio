@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import ProductDashboardShell from '@/features/dashboard/client/ProductDashboardShell';
 import { VIDEO_MANAGER_LANGUAGES, type VideoManagerVideoType } from '@/features/video-manager/constants';
 import {
-  ArrowDownToLine, ArrowRight, ArrowUpRight, Check, CheckCircle2, Clock3,
-  ExternalLink, Instagram, Languages, Link2, LoaderCircle, Plus, RefreshCw, Search, Youtube,
+  ArrowDownToLine, ArrowRight, ArrowUpRight, Ban, Check, CheckCircle2, Clock3,
+  ExternalLink, Instagram, Languages, Link2, LoaderCircle, Plus, RefreshCw, Search, Trash2, Youtube,
 } from 'lucide-react';
 
-type RequestStatus = 'pending' | 'in_progress' | 'completed';
+type RequestStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 type RequestFilter = 'all' | RequestStatus;
 type SubmittedRequest = {
   id: string;
@@ -25,6 +25,7 @@ const requestFilters: { id: RequestFilter; label: string }[] = [
   { id: 'pending', label: 'Pending' },
   { id: 'in_progress', label: 'In progress' },
   { id: 'completed', label: 'Completed' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
 
 function matchesRequestQuery(request: SubmittedRequest, query: string) {
@@ -59,6 +60,7 @@ export default function VideoManagerDashboard({
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsRefreshing, setRequestsRefreshing] = useState(false);
   const [requestsError, setRequestsError] = useState('');
+  const [requestAction, setRequestAction] = useState<{ id: string; action: 'cancel' | 'delete' } | null>(null);
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
   const [requestSearchOpen, setRequestSearchOpen] = useState(false);
@@ -160,6 +162,7 @@ export default function VideoManagerDashboard({
     pending: requests.filter(request => request.status === 'pending').length,
     in_progress: requests.filter(request => request.status === 'in_progress').length,
     completed: requests.filter(request => request.status === 'completed').length,
+    cancelled: requests.filter(request => request.status === 'cancelled').length,
   }), [requests]);
 
   function toggleLanguage(language: string) {
@@ -193,6 +196,46 @@ export default function VideoManagerDashboard({
       setSubmitError(error instanceof Error ? error.message : 'Could not submit the video request.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function cancelRequest(request: SubmittedRequest) {
+    if (!window.confirm(`Cancel "${request.project_name}"? It will stay in your request history as cancelled.`)) return;
+    setRequestAction({ id: request.id, action: 'cancel' });
+    setRequestsError('');
+    try {
+      const response = await fetch('/api/video-manager/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: request.id, action: 'cancel' }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not cancel this request.');
+      setRequests(current => current.map(item => item.id === request.id ? { ...item, status: 'cancelled' } : item));
+    } catch (error) {
+      setRequestsError(error instanceof Error ? error.message : 'Could not cancel this request.');
+    } finally {
+      setRequestAction(null);
+    }
+  }
+
+  async function deleteRequest(request: SubmittedRequest) {
+    if (!window.confirm(`Permanently delete "${request.project_name}"? This cannot be undone.`)) return;
+    setRequestAction({ id: request.id, action: 'delete' });
+    setRequestsError('');
+    try {
+      const response = await fetch('/api/video-manager/requests', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: request.id }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not delete this request.');
+      setRequests(current => current.filter(item => item.id !== request.id));
+    } catch (error) {
+      setRequestsError(error instanceof Error ? error.message : 'Could not delete this request.');
+    } finally {
+      setRequestAction(null);
     }
   }
 
@@ -300,7 +343,7 @@ export default function VideoManagerDashboard({
               : filteredRequests.length === 0 ? <div className="video-manager-list-empty"><span><Languages size={20}/></span><b>{!requests.length ? 'No video requests yet' : requestSearchQuery.trim() ? 'No matching requests' : 'No requests in this status'}</b><small>{!requests.length ? 'Create a dub job to see its progress here.' : requestSearchQuery.trim() ? 'Try another video name, language, or status.' : 'Choose another filter to see your requests.'}</small></div>
                 : filteredRequests.length > 0 && <div className="video-manager-request-table-wrap">
                   <table className="video-manager-request-table">
-                    <thead><tr><th scope="col">Name</th><th scope="col">Target languages</th><th scope="col">Submitted</th><th scope="col">Status</th><th scope="col">Source</th></tr></thead>
+                    <thead><tr><th scope="col">Name</th><th scope="col">Target languages</th><th scope="col">Submitted</th><th scope="col">Status</th><th scope="col">Source</th><th scope="col">Actions</th></tr></thead>
                     <tbody>{filteredRequests.map(request => <tr key={request.id}>
                       <td data-label="Name">
                         <div className="video-manager-request-name">
@@ -312,6 +355,14 @@ export default function VideoManagerDashboard({
                       <td data-label="Submitted" className="video-manager-request-date">{new Date(request.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                       <td data-label="Status"><span className={`video-manager-request-status ${request.status}`}>{request.status.replace('_', ' ')}</span></td>
                       <td data-label="Source"><a className="video-manager-source-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a></td>
+                      <td data-label="Actions"><div className="video-manager-request-actions">
+                        {(request.status === 'pending' || request.status === 'in_progress') && <button type="button" className="video-manager-request-action cancel" onClick={() => void cancelRequest(request)} disabled={requestAction !== null} aria-label={`Cancel ${request.project_name}`}>
+                          {requestAction?.id === request.id && requestAction.action === 'cancel' ? <LoaderCircle size={13} className="spin"/> : <Ban size={13}/>} {requestAction?.id === request.id && requestAction.action === 'cancel' ? 'Cancelling…' : 'Cancel'}
+                        </button>}
+                        <button type="button" className="video-manager-request-action delete" onClick={() => void deleteRequest(request)} disabled={requestAction !== null} aria-label={`Delete ${request.project_name}`}>
+                          {requestAction?.id === request.id && requestAction.action === 'delete' ? <LoaderCircle size={13} className="spin"/> : <Trash2 size={13}/>} {requestAction?.id === request.id && requestAction.action === 'delete' ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div></td>
                     </tr>)}</tbody>
                   </table>
                 </div>}

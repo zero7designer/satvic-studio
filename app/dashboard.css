@@ -1853,6 +1853,14 @@ body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d11
 .video-manager-request-status{flex:none;padding:4px 7px;border-radius:999px;background:#faf3e6;color:#997545;font:500 8px "Matter";text-transform:capitalize}
 .video-manager-request-status.in_progress{background:#f0ecf7;color:#705c99}
 .video-manager-request-status.completed{background:#edf5ef;color:#558363}
+.video-manager-request-status.cancelled{background:#f1f2f0;color:#70776e}
+.video-manager-request-actions{display:flex;align-items:center;gap:6px}
+.video-manager-request-action{display:inline-flex;min-height:30px;align-items:center;justify-content:center;gap:5px;padding:0 8px;border:1px solid #e3e7e1;border-radius:7px;background:#fff;color:#5d695c;font:500 9px "Matter";cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.video-manager-request-action.cancel{border-color:#e8dfca;background:#fbf7ed;color:#8b7245}
+.video-manager-request-action.delete{border-color:#efdad7;background:#fff7f5;color:#a4483e}
+.video-manager-request-action.cancel:hover:not(:disabled){border-color:#d6c69f;background:#f8f0df}
+.video-manager-request-action.delete:hover:not(:disabled){border-color:#e3bdb7;background:#fcece9}
+.video-manager-request-action:disabled{opacity:.6;cursor:wait}
 .video-manager-request-languages{display:flex;flex-wrap:wrap;gap:5px}
 .video-manager-request-languages span{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#f2f3f1;color:#424941;font:400 9px "Matter"}
 .video-manager-request-date{color:#7e827b!important}
@@ -2152,13 +2160,15 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-video-manager .video-manager-request-filters button.active{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent-deep)}
 .app-shell.product-video-manager .video-manager-request-filters button span{color:inherit;opacity:.72}
 .app-shell.product-video-manager .video-manager-request-table-wrap{border-color:var(--studio-line)}
-.app-shell.product-video-manager .video-manager-request-table{min-width:800px}
+.app-shell.product-video-manager .video-manager-request-table{min-width:1000px}
 .app-shell.product-video-manager .video-manager-request-table th{height:42px;padding:0 18px;border-color:var(--studio-line);background:var(--studio-canvas);color:var(--studio-body);font:600 8px "Matter";letter-spacing:.075em;text-transform:uppercase}
-.app-shell.product-video-manager .video-manager-request-table th:nth-child(1){width:31%}
-.app-shell.product-video-manager .video-manager-request-table th:nth-child(2){width:23%}
-.app-shell.product-video-manager .video-manager-request-table th:nth-child(3){width:16%}
-.app-shell.product-video-manager .video-manager-request-table th:nth-child(4){width:15%}
-.app-shell.product-video-manager .video-manager-request-table th:nth-child(5){width:15%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(1){width:26%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(2){width:22%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(3){width:12%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(4){width:12%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(5){width:12%}
+.app-shell.product-video-manager .video-manager-request-table th:nth-child(6){width:16%}
+.app-shell.product-video-manager .video-manager-request-table td[data-label=Actions]{padding-right:10px;padding-left:10px}
 .app-shell.product-video-manager .video-manager-request-table td{height:76px;padding:9px 18px;border-color:var(--studio-line);color:var(--studio-body);font-size:10px}
 .app-shell.product-video-manager .video-manager-request-table tbody tr:hover{background:var(--studio-soft)}
 .app-shell.product-video-manager .video-manager-request-name{gap:12px}
@@ -2198,6 +2208,10 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.pending{background:#3a2f1e;color:#e3b341}
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.in_progress{background:#302444;color:#d2a8ff}
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.completed{background:#173624;color:#7ee787}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.cancelled{background:#2d333b;color:var(--studio-dark-muted)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-action{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-action.cancel{border-color:#5a4b2d;background:#332b1c;color:#e3b341}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-action.delete{border-color:#623b3b;background:#3d2326;color:#ff7b72}
 .app-shell.product-video-manager[data-mode=dark] .video-manager-source-link{color:var(--studio-accent)}
 @media(max-width:760px){
   .app-shell.product-video-manager .video-manager-dashboard-status{padding-bottom:12px}
@@ -2219,7 +2233,7 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
   .app-shell.product-video-manager .video-manager-request-search{width:100%;min-width:0}
   .app-shell.product-video-manager .video-manager-request-filters{width:100%;overflow-x:auto;padding-bottom:2px}
   .app-shell.product-video-manager .video-manager-request-filters button{flex:none}
-  .app-shell.product-video-manager .video-manager-request-table{min-width:800px}
+  .app-shell.product-video-manager .video-manager-request-table{min-width:1000px}
 }
 @media(max-width:760px){
   .app-shell.product-video-manager[data-mode=dark] .video-manager-status-metrics .metric-card:nth-child(odd){border-right:1px solid var(--studio-dark-border)!important}

@@ -11,7 +11,7 @@ export type IncomingVideoRequest = {
   video_type: 'short' | 'long';
   source_url: string;
   target_languages: string[];
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   created_at: string;
 };
 
@@ -32,7 +32,7 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
-  const activeRequests = requests.filter(request => request.video_type === videoType && request.status !== 'completed');
+  const activeRequests = requests.filter(request => request.video_type === videoType && request.status !== 'completed' && request.status !== 'cancelled');
   const visibleRequests = selectedDate
     ? activeRequests.filter(request => requestDateKey(request.created_at) === selectedDate)
     : activeRequests;
@@ -54,6 +54,7 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
   }
 
   async function updateStatus(request: IncomingVideoRequest) {
+    if (request.status !== 'pending' && request.status !== 'in_progress') return;
     const status = request.status === 'pending' ? 'in_progress' : 'completed';
     setUpdatingRequestId(request.id);
     setError('');
@@ -106,7 +107,7 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                 <small className="incoming-video-date">{new Date(request.created_at).toLocaleString()}</small>
               </div>
               <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a>
-              {request.status !== 'completed' && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
+              {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
                 {updatingRequestId === request.id ? 'Saving…' : request.status === 'pending' ? 'Start' : 'Complete'}
               </button>}
               <ArrowUpRight className="incoming-video-arrow" size={16} aria-hidden="true"/>

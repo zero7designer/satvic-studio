@@ -523,7 +523,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }, [projects]);
   const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
   const activeFormatRequests = useMemo(() => incomingRequests.filter(request =>
-    request.video_type === selectedVideoType && request.status !== 'completed',
+    request.video_type === selectedVideoType && request.status !== 'completed' && request.status !== 'cancelled',
   ), [incomingRequests, selectedVideoType]);
   const taskCountsByDate = useMemo(() => activeFormatRequests.reduce<Record<string, number>>((counts, request) => {
     const submittedAt = Date.parse(request.created_at);

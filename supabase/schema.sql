@@ -67,7 +67,7 @@ create table if not exists public.video_manager_requests (
   video_type text not null check (video_type in ('short', 'long')),
   source_url text not null check (source_url ~ '^https://'),
   target_languages text[] not null check (cardinality(target_languages) between 1 and 12),
-  status text not null default 'pending' check (status in ('pending', 'in_progress', 'completed')),
+  status text not null default 'pending' check (status in ('pending', 'in_progress', 'completed', 'cancelled')),
   created_at timestamptz not null default now()
 );
 create index if not exists video_manager_requests_status_created_idx

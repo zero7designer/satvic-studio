@@ -15,7 +15,7 @@ export default function AuthPanel({ mode, setup, error }: AuthPanelProps) {
       <div className="auth-layout">
         <section className="auth-main-panel">
           <header className="auth-v2-header">
-            <Link href="/" className="auth-back-link"><ArrowLeft size={15}/>Back to website</Link>
+            {isSignup ? <Link href="/" className="auth-back-link"><ArrowLeft size={15}/>Back to sign in</Link> : <span />}
             <span className="auth-v2-brand"><img src="https://satvicmovement.org/images/favicon.png" alt=""/><span>Satvic Studio</span></span>
           </header>
           <div className="auth-form-glass"><div className="auth-v2-content">

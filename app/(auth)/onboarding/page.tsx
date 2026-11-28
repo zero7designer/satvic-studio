@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 import { completeProfile } from '@/features/auth/server/onboarding-actions';
 import AvatarPicker from '@/features/auth/components/AvatarPicker';
 import PendingSubmitButton from '@/features/auth/components/PendingSubmitButton';
@@ -19,6 +20,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   return (
     <main className="auth-screen onboarding-screen">
       <section className="auth-card onboarding-card">
+        <Link className="onboarding-back-link" href="/"><ArrowRight size={13}/> Back to sign in or create account</Link>
         <h1>Set up your profile</h1>
         <p className="auth-copy">Add your name and choose an avatar. Your Google account determines your workspace role.</p>
         {params.error === 'details' ? <div className="auth-error">Enter your name to continue.</div> : params.error === 'save' ? <div className="auth-error">We couldn’t save your profile. Please try again.</div> : null}

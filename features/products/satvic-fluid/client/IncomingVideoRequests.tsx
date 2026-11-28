@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, Youtube } from 'lucide-react';
+import { Clock3, ExternalLink, Instagram, LoaderCircle, RefreshCw, Youtube } from 'lucide-react';
 
 export type IncomingVideoRequest = {
   id: string;
@@ -106,11 +106,12 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                 <div className="incoming-video-languages"><b>Dub into</b>{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
                 <small className="incoming-video-date">{new Date(request.created_at).toLocaleString()}</small>
               </div>
-              <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a>
-              {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
-                {updatingRequestId === request.id ? 'Saving…' : request.status === 'pending' ? 'Start' : 'Complete'}
-              </button>}
-              <ArrowUpRight className="incoming-video-arrow" size={16} aria-hidden="true"/>
+              <div className="incoming-video-actions">
+                <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={15}/></a>
+                {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
+                  {updatingRequestId === request.id ? 'Saving…' : request.status === 'pending' ? 'Start' : 'Complete'}
+                </button>}
+              </div>
             </article>)}</div>}
         </>}
     </section>

@@ -7,7 +7,7 @@ import './community-map.css';
 import './landing.css';
 import '../features/website/satvic-studio.css';
 import './auth-page.css';
-import './video-manager.css';
+import './incoming-video-requests.css';
 import NavigationLoading from '@/features/navigation/NavigationLoading';
 
 export const metadata: Metadata = {

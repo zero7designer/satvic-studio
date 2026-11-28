@@ -8,7 +8,7 @@ import {
   PanelLeftOpen, Plus, Sun, Trash2, X, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
-import { getProduct, products, type ProductFeature, type ProductId } from '@/features/products/registry';
+import { getProduct, products, type ProductDefinition, type ProductFeature, type ProductId } from '@/features/products/registry';
 import { getProfileAvatarSrc } from '@/features/auth/profile-avatar';
 import PendingSubmitButton from '@/features/auth/components/PendingSubmitButton';
 import { startNavigationLoading } from '@/features/navigation/NavigationLoading';
@@ -17,6 +17,10 @@ const featureIcons: Record<ProductFeature['icon'], LucideIcon> = {
   plus: Plus,
   workflow: CheckCheck,
   calculator: Calculator,
+};
+const productIcons: Record<ProductDefinition['icon'], LucideIcon> = {
+  audio: AudioLines,
+  plus: Plus,
 };
 
 type ProductDashboardShellProps = {
@@ -50,6 +54,8 @@ export default function ProductDashboardShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const product = getProduct(productId)!;
+  const isVideoManager = productId === 'video-manager';
+  const ProductIcon = productIcons[product.icon];
   const [navOpen, setNavOpen] = useState(false);
   const [productRailCollapsed, setProductRailCollapsed] = useState(false);
   const [featureRailCollapsed, setFeatureRailCollapsed] = useState(false);
@@ -158,8 +164,10 @@ export default function ProductDashboardShell({
   const accountName = accountEmail
     ? accountEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
     : 'Account';
-  const workspaceName = accountName === 'Account' ? 'Satvic Studio Workspace' : `${accountName}'s Workspace`;
-  const visibleProducts = products;
+  const workspaceName = isVideoManager
+    ? 'Video Manager workspace'
+    : accountName === 'Account' ? 'Satvic Studio Workspace' : `${accountName}'s Workspace`;
+  const visibleProducts = products.filter(item => item.id === productId);
   const visibleNotifications = notifications;
   const confirmationPrompt = accountEmail.trim() || 'DELETE';
   const deleteAccountConfirmed = deleteAccountConfirmation.trim().toLowerCase() === confirmationPrompt.toLowerCase();
@@ -251,12 +259,12 @@ export default function ProductDashboardShell({
   return (
     <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`} data-theme={dashboardTheme} data-mode={dashboardMode}>
       <nav className={`product-rail${productMenuOpen ? ' product-rail-expanded' : ''}`} aria-label="Satvic products">
-        <button type="button" className="rail-workspace" aria-label="Open product menu" aria-haspopup="true" aria-expanded={productMenuOpen} title="Satvic Studio and tools" onClick={() => { setProductMenuOpen(open => !open); setAccountMenuOpen(false); setNotificationOpen(false); }}>
-          <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
+        <button type="button" className="rail-workspace" aria-label="Open product menu" aria-haspopup="true" aria-expanded={productMenuOpen} title={isVideoManager ? 'Create Job' : 'Satvic Studio and tools'} onClick={() => { setProductMenuOpen(open => !open); setAccountMenuOpen(false); setNotificationOpen(false); }}>
+          <span className="rail-workspace-mark">{isVideoManager ? <span className="video-manager-create-mark"><ProductIcon size={20}/></span> : <img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" />}</span>
         </button>
         <div className="rail-product-list" aria-label="Products">
           {visibleProducts.map(item => <button key={item.id} type="button" aria-current={!hideFeatureNavigation && item.id === productId ? 'page' : undefined} className={`rail-product${!hideFeatureNavigation && item.id === productId ? ' active' : ''}`} onClick={() => navigateToProduct(item.href)} title={item.name}>
-            <span className="rail-product-icon"><AudioLines size={19} /></span>
+            <span className="rail-product-icon">{(() => { const Icon = productIcons[item.icon]; return <Icon size={19} />; })()}</span>
           </button>)}
         </div>
         <div className="rail-spacer" />
@@ -267,13 +275,13 @@ export default function ProductDashboardShell({
           <span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span>
         </button>
         <section className="product-drawer" aria-label="Satvic Studio and product switcher">
-          <div className="drawer-workspace drawer-workspace-static" aria-label="Satvic Studio workspace">
-            <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
-            <span><b>Satvic Studio</b><small>{workspaceName}</small></span>
+          <div className="drawer-workspace drawer-workspace-static" aria-label={`${product.name} workspace`}>
+            <span className="rail-workspace-mark">{isVideoManager ? <span className="video-manager-create-mark"><ProductIcon size={20}/></span> : <img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" />}</span>
+            <span><b>{isVideoManager ? 'Create Job' : 'Satvic Studio'}</b><small>{workspaceName}</small></span>
           </div>
           <div className="drawer-product-list" aria-label="Products">
             {visibleProducts.map(item => <button key={item.id} type="button" aria-current={!hideFeatureNavigation && item.id === productId ? 'page' : undefined} className={`drawer-product${!hideFeatureNavigation && item.id === productId ? ' active' : ''}`} onClick={() => navigateToProduct(item.href)}>
-              <span className="product-menu-icon"><AudioLines size={19} /></span><span><b>{item.name}</b><small>{item.description}</small></span>
+              <span className="product-menu-icon">{(() => { const Icon = productIcons[item.icon]; return <Icon size={19} />; })()}</span><span><b>{item.name}</b><small>{item.description}</small></span>
             </button>)}
           </div>
           <button type="button" className="drawer-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)}>

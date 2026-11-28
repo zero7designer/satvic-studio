@@ -1,61 +1,85 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { signOut } from '@/features/auth/server/actions';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import ProductDashboardShell from '@/features/dashboard/client/ProductDashboardShell';
 import { VIDEO_MANAGER_LANGUAGES, type VideoManagerVideoType } from '@/features/video-manager/constants';
 import {
-  ArrowUpRight, Check, CheckCircle2, Clapperboard, ExternalLink, Instagram, Languages, Link2,
-  LoaderCircle, LogOut, Send, Trash2, X, Youtube,
+  ArrowDownToLine, ArrowRight, ArrowUpRight, Check, CheckCircle2, Clock3,
+  ExternalLink, Instagram, Languages, Link2, LoaderCircle, Plus, RefreshCw, Youtube,
 } from 'lucide-react';
 
+type RequestStatus = 'pending' | 'in_progress' | 'completed';
+type RequestFilter = 'all' | RequestStatus;
 type SubmittedRequest = {
   id: string;
   project_name: string;
   video_type: VideoManagerVideoType;
   source_url: string;
   target_languages: string[];
-  status: 'pending' | 'in_progress' | 'completed';
+  status: RequestStatus;
   created_at: string;
 };
 
-export default function VideoManagerDashboard({ accountEmail, fullName }: { accountEmail: string; fullName: string }) {
-  const router = useRouter();
+const requestFilters: { id: RequestFilter; label: string }[] = [
+  { id: 'all', label: 'All requests' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'completed', label: 'Completed' },
+];
+
+export default function VideoManagerDashboard({
+  accountEmail,
+  accountAvatar,
+}: {
+  accountEmail: string;
+  accountAvatar: string;
+}) {
+  const [activeView, setActiveView] = useState('create-job');
   const [projectName, setProjectName] = useState('');
   const [videoType, setVideoType] = useState<VideoManagerVideoType | null>(null);
   const [sourceUrl, setSourceUrl] = useState('');
   const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [submittedName, setSubmittedName] = useState('');
-  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState('');
-  const [deleteError, setDeleteError] = useState('');
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [myRequests, setMyRequests] = useState<SubmittedRequest[]>([]);
+  const [requests, setRequests] = useState<SubmittedRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsRefreshing, setRequestsRefreshing] = useState(false);
   const [requestsError, setRequestsError] = useState('');
-  const confirmationPrompt = accountEmail.trim() || 'DELETE';
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
 
-  const loadMyRequests = useCallback(async () => {
+  const loadRequests = useCallback(async (refresh = false) => {
+    if (refresh) setRequestsRefreshing(true);
     try {
       const response = await fetch('/api/video-manager/requests', { cache: 'no-store' });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not load your requests.');
-      setMyRequests(body.requests || []);
+      setRequests(body.requests || []);
       setRequestsError('');
-    } catch (requestError) {
-      setRequestsError(requestError instanceof Error ? requestError.message : 'Could not load your requests.');
+    } catch (error) {
+      setRequestsError(error instanceof Error ? error.message : 'Could not load your requests.');
     } finally {
       setRequestsLoading(false);
+      setRequestsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadMyRequests();
-    const timer = window.setInterval(() => void loadMyRequests(), 30000);
+    void loadRequests();
+    const timer = window.setInterval(() => void loadRequests(), 30000);
     return () => window.clearInterval(timer);
-  }, [loadMyRequests]);
+  }, [loadRequests]);
+
+  const filteredRequests = useMemo(
+    () => requests.filter(request => requestFilter === 'all' || request.status === requestFilter),
+    [requestFilter, requests],
+  );
+  const requestCounts = useMemo(() => ({
+    all: requests.length,
+    pending: requests.filter(request => request.status === 'pending').length,
+    in_progress: requests.filter(request => request.status === 'in_progress').length,
+    completed: requests.filter(request => request.status === 'completed').length,
+  }), [requests]);
 
   function toggleLanguage(language: string) {
     setTargetLanguages(current => current.includes(language)
@@ -65,7 +89,7 @@ export default function VideoManagerDashboard({ accountEmail, fullName }: { acco
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError('');
+    setSubmitError('');
     setSubmittedName('');
     setSubmitting(true);
     try {
@@ -77,166 +101,138 @@ export default function VideoManagerDashboard({ accountEmail, fullName }: { acco
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not submit the video request.');
       setSubmittedName(projectName.trim());
-      void loadMyRequests();
       setProjectName('');
       setVideoType(null);
       setSourceUrl('');
       setTargetLanguages([]);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Could not submit the video request.');
+      setActiveView('request-status');
+      setRequestFilter('all');
+      await loadRequests(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not submit the video request.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function deleteAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setDeleteBusy(true);
-    setDeleteError('');
-    try {
-      const response = await fetch('/api/account/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmation: deleteConfirmation }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || 'Could not delete your account.');
-      for (const key of Object.keys(window.localStorage)) {
-        if (key === 'satvic-studio-dashboard-theme' || key === 'satvic-studio-dashboard-mode' || key.startsWith('satvic-cost-estimate:')) {
-          window.localStorage.removeItem(key);
-        }
-      }
-      router.replace('/login');
-      router.refresh();
-    } catch (requestError) {
-      setDeleteError(requestError instanceof Error ? requestError.message : 'Could not delete your account.');
-      setDeleteBusy(false);
-    }
-  }
-
   return (
-    <main className="video-manager-page">
-      <header className="video-manager-topbar">
-        <a className="video-manager-brand" href="/dashboard" aria-label="Satvic Studio home">
-          <span className="video-manager-brand-mark">✳</span>
-          <span><b>Satvic Studio</b><small>VIDEO OPERATIONS</small></span>
-        </a>
-        <div className="video-manager-account">
-          <span className="video-manager-role">Video Manager</span>
-          <span className="video-manager-user">{fullName}</span>
-          <div className="video-manager-account-actions">
-            <form action={signOut}><button className="video-manager-signout" type="submit"><LogOut size={15}/> Log out</button></form>
-            <button type="button" className="video-manager-delete-trigger" onClick={() => { setDeleteConfirmation(''); setDeleteError(''); setDeleteAccountOpen(true); }}><Trash2 size={14}/> Delete account</button>
-          </div>
-        </div>
-      </header>
-
-      <div className="video-manager-content">
-        <section className="video-manager-welcome">
-          <div className="video-manager-welcome-copy">
-            <span className="video-manager-eyebrow"><span/> VIDEO LOCALIZATION WORKSPACE</span>
-            <h1>Make every video<br/><em>feel at home.</em></h1>
-            <p>Send your video and language requirements to the dubbing team. They’ll access the source and prepare the next steps.</p>
-            <div className="video-manager-welcome-meta"><span><CheckCircle2 size={15}/> Request tracking</span><i/> <span><Languages size={15}/> 12 languages</span></div>
-          </div>
-          <div className="video-manager-orbit" aria-hidden="true">
-            <div className="video-manager-orbit-ring ring-one"/><div className="video-manager-orbit-ring ring-two"/>
-            <span className="video-manager-orbit-core"><Clapperboard size={28}/></span>
-            <span className="video-manager-orbit-chip chip-short"><Instagram size={13}/> Reels & Shorts</span>
-            <span className="video-manager-orbit-chip chip-long"><Youtube size={14}/> YouTube</span>
-          </div>
-        </section>
-
-        <div className="video-manager-layout">
-          <section className="video-request-panel">
-            <div className="video-request-heading">
-              <span className="video-request-icon"><Send size={17}/></span>
-              <div><span className="video-manager-eyebrow">NEW REQUEST</span><h2>Send a video for dubbing</h2></div>
-              <span className="video-request-step">01 <i/> 03</span>
+    <ProductDashboardShell
+      productId="video-manager"
+      accountEmail={accountEmail}
+      accountAvatar={accountAvatar}
+      initialFeatureId="create-job"
+      onFeatureSelect={setActiveView}
+    >
+      <div className="video-manager-dashboard">
+        {activeView === 'create-job' ? <>
+          <header className="welcome-row">
+            <div>
+              <span className="eyebrow"><span className="eyebrow-line"/> VIDEO MANAGER</span>
+              <h1>Create dub job</h1>
+              <p className="welcome-subtitle">Send a video and language requirements to the dubbing team.</p>
             </div>
-            <form className="video-request-form" onSubmit={submitRequest}>
-              <label className="video-request-field">
+          </header>
+
+          <section className="video-manager-create-card panel" aria-labelledby="video-manager-new-request-title">
+            <header className="video-manager-create-heading">
+              <div className="video-manager-create-heading-icon"><Plus size={19}/></div>
+              <div>
+                <span className="section-kicker">NEW REQUEST</span>
+                <h2 id="video-manager-new-request-title">Create a dubbing request</h2>
+                <p>Add the source link, video format, and every language you need.</p>
+              </div>
+            </header>
+
+            <form className="video-manager-job-form" onSubmit={submitRequest}>
+              <label className="video-manager-form-field">
                 <span>Video name</span>
                 <input value={projectName} onChange={event => setProjectName(event.target.value)} minLength={2} maxLength={120} placeholder="e.g. The benefits of mindful eating" required/>
               </label>
 
-              <fieldset className="video-type-field">
-                <legend>Choose video format</legend>
-                <div className="video-manager-type-options">
-                  <button type="button" className={`video-manager-type-option${videoType === 'short' ? ' selected' : ''}`} aria-pressed={videoType === 'short'} onClick={() => setVideoType('short')}>
-                    <span className="video-manager-type-symbol short"><Instagram size={17}/></span>
-                    <span><b>Short-form</b><small>Reels and Shorts</small><span className="video-manager-platforms"><i><Instagram size={11}/> Instagram Reels</i><i><Youtube size={11}/> YouTube Shorts</i></span></span>
-                    {videoType === 'short' && <Check className="video-manager-type-check" size={17}/>}
+              <label className="video-manager-form-field">
+                <span>Source video link <small>Use a link the dubbing team can open</small></span>
+                <span className="video-manager-url-field"><Link2 size={17}/><input type="url" value={sourceUrl} onChange={event => setSourceUrl(event.target.value)} placeholder="https://…" required/><ArrowUpRight size={15}/></span>
+              </label>
+
+              <fieldset className="video-manager-choice-field">
+                <legend>Video format</legend>
+                <div className="video-manager-format-options">
+                  <button type="button" className={`video-manager-format-option${videoType === 'short' ? ' selected' : ''}`} aria-pressed={videoType === 'short'} onClick={() => setVideoType('short')}>
+                    <span className="video-manager-format-icon short"><Instagram size={18}/></span>
+                    <span><b>Short-form</b><small>Reels and Shorts</small><span className="folder-platforms"><i className="folder-platform-badge instagram"><Instagram size={12}/> Instagram Reels</i><i className="folder-platform-badge youtube"><Youtube size={12}/> YouTube Shorts</i></span></span>
+                    {videoType === 'short' && <Check size={17}/>}
                   </button>
-                  <button type="button" className={`video-manager-type-option${videoType === 'long' ? ' selected' : ''}`} aria-pressed={videoType === 'long'} onClick={() => setVideoType('long')}>
-                    <span className="video-manager-type-symbol long"><Youtube size={18}/></span>
-                    <span><b>Long-form</b><small>Full-length videos</small><span className="video-manager-platforms"><i><Youtube size={11}/> YouTube</i></span></span>
-                    {videoType === 'long' && <Check className="video-manager-type-check" size={17}/>}
+                  <button type="button" className={`video-manager-format-option${videoType === 'long' ? ' selected' : ''}`} aria-pressed={videoType === 'long'} onClick={() => setVideoType('long')}>
+                    <span className="video-manager-format-icon long"><Youtube size={19}/></span>
+                    <span><b>Long-form</b><small>Full-length YouTube videos</small><span className="folder-platforms"><i className="folder-platform-badge youtube"><Youtube size={12}/> YouTube</i></span></span>
+                    {videoType === 'long' && <Check size={17}/>}
                   </button>
                 </div>
               </fieldset>
 
-              <label className="video-request-field">
-                <span>Source video link <small>Share a link the dubbing team can open</small></span>
-                <span className="video-request-link-input"><Link2 size={16}/><input type="url" value={sourceUrl} onChange={event => setSourceUrl(event.target.value)} placeholder="https://…" required/><ArrowUpRight size={15}/></span>
-              </label>
-              <fieldset className="video-language-field">
+              <fieldset className="video-manager-choice-field">
                 <legend>Languages to dub <small>Select all that apply</small></legend>
-                <div className="video-language-options">{VIDEO_MANAGER_LANGUAGES.map(language => <label key={language} className={`video-language-option${targetLanguages.includes(language) ? ' selected' : ''}`}><input type="checkbox" checked={targetLanguages.includes(language)} onChange={() => toggleLanguage(language)}/><span className="video-language-check">{targetLanguages.includes(language) && <Check size={11}/>}</span>{language}</label>)}</div>
-                <span className="video-language-selected">{targetLanguages.length ? `${targetLanguages.length} ${targetLanguages.length === 1 ? 'language' : 'languages'} selected` : 'Choose one or more languages'}</span>
+                <div className="video-manager-language-options">
+                  {VIDEO_MANAGER_LANGUAGES.map(language => <label className={`video-manager-language-option${targetLanguages.includes(language) ? ' selected' : ''}`} key={language}>
+                    <input type="checkbox" checked={targetLanguages.includes(language)} onChange={() => toggleLanguage(language)}/>
+                    <span>{targetLanguages.includes(language) && <Check size={12}/>}</span>{language}
+                  </label>)}
+                </div>
+                <small className="video-manager-language-count">{targetLanguages.length ? `${targetLanguages.length} ${targetLanguages.length === 1 ? 'language' : 'languages'} selected` : 'Choose one or more target languages.'}</small>
               </fieldset>
 
-              {error && <p className="video-request-error" role="alert">{error}</p>}
-              {submittedName && <p className="video-request-success" role="status"><CheckCircle2 size={16}/> “{submittedName}” is in the dubbing team’s request queue.</p>}
-              <button className="video-request-submit" type="submit" disabled={submitting || !videoType || targetLanguages.length === 0}>
-                {submitting ? <><LoaderCircle size={16} className="video-manager-spin"/> Sending request…</> : <>Send to dubbing team <ArrowUpRight size={16}/></>}
-              </button>
+              {submitError && <p className="video-manager-form-error" role="alert">{submitError}</p>}
+              {submittedName && <p className="video-manager-form-success" role="status"><CheckCircle2 size={16}/> “{submittedName}” was added to your request list.</p>}
+
+              <footer className="video-manager-form-footer">
+                <span><Clock3 size={14}/> The dubbing team will review your request.</span>
+                <button className="primary-btn" type="submit" disabled={submitting || !videoType || targetLanguages.length === 0}>
+                  {submitting ? <><LoaderCircle size={16} className="spin"/> Sending…</> : <>Create request <ArrowRight size={16}/></>}
+                </button>
+              </footer>
             </form>
           </section>
-
-          <aside className="video-manager-side">
-            <section className="video-manager-how">
-              <span className="video-manager-eyebrow">A SIMPLE HANDOFF</span>
-              <h2>From your link<br/>to every language.</h2>
-              <ol>
-                <li><span>1</span><div><b>Share the source</b><small>Add the video link and choose its format.</small></div></li>
-                <li><span>2</span><div><b>Pick your languages</b><small>Tell the dubbing team where it should go.</small></div></li>
-                <li><span>3</span><div><b>Team takes it from here</b><small>Your request appears in the Satvic Fluid dashboard.</small></div></li>
-              </ol>
-            </section>
-            <section className="video-manager-history" aria-labelledby="video-manager-history-title">
-              <header><span className="video-manager-eyebrow">YOUR SUBMISSIONS</span><h2 id="video-manager-history-title">Recent requests</h2></header>
-              {requestsLoading ? <p className="video-manager-history-state"><LoaderCircle size={14} className="video-manager-spin"/> Loading requests…</p>
-                : requestsError ? <p className="video-manager-history-state error" role="alert">{requestsError}</p>
-                  : myRequests.length === 0 ? <p className="video-manager-history-state">Your submitted videos will appear here.</p>
-                    : <div className="video-manager-history-list">{myRequests.slice(0, 5).map(request => <article key={request.id} className="video-manager-history-item">
-                      <div><b>{request.project_name}</b><small>{request.video_type === 'short' ? 'Short-form' : 'Long-form'} · {request.target_languages.join(', ')}</small></div>
-                      <span className={`video-manager-history-status ${request.status}`}>{request.status.replace('_', ' ')}</span>
-                      <a href={request.source_url} target="_blank" rel="noopener noreferrer" aria-label={`Open source link for ${request.project_name}`}><ExternalLink size={13}/></a>
-                    </article>)}</div>}
-            </section>
-            <section className="video-manager-access-note"><span><Link2 size={16}/></span><div><b>Make sure the link is accessible</b><p>Anyone on the dubbing team who has the link should be able to view or download the source video.</p></div></section>
-            <p className="video-manager-account-note">Signed in with Google as <b>{accountEmail}</b></p>
-          </aside>
-        </div>
-      </div>
-      {deleteAccountOpen && <div className="account-delete-backdrop">
-        <section className="account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="video-manager-delete-title" aria-describedby="video-manager-delete-description">
-          <button type="button" className="account-delete-close" aria-label="Close dialog" onClick={() => { if (!deleteBusy) setDeleteAccountOpen(false); }}><X size={17}/></button>
-          <span className="account-delete-icon"><Trash2 size={20}/></span>
-          <h2 id="video-manager-delete-title">Delete your account?</h2>
-          <p id="video-manager-delete-description">This permanently deletes your Satvic Studio profile and data, including any video requests you submitted. Shared files already copied outside Satvic Studio are not deleted.</p>
-          <form onSubmit={deleteAccount}>
-            <label htmlFor="video-manager-delete-confirmation">Type <strong>{confirmationPrompt}</strong> to confirm</label>
-            <input id="video-manager-delete-confirmation" autoComplete="off" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} disabled={deleteBusy}/>
-            {deleteError && <p className="account-delete-error" role="alert">{deleteError}</p>}
-            <div className="account-delete-actions">
-              <button type="button" className="account-delete-cancel" onClick={() => setDeleteAccountOpen(false)} disabled={deleteBusy}>Cancel</button>
-              <button type="submit" className="account-delete-confirm" disabled={deleteBusy || deleteConfirmation.trim().toLowerCase() !== confirmationPrompt.toLowerCase()}>{deleteBusy ? <><LoaderCircle size={15} className="video-manager-spin"/> Deleting…</> : <><Trash2 size={15}/> Delete account and data</>}</button>
+        </> : <>
+          <header className="welcome-row video-manager-status-header">
+            <div>
+              <span className="eyebrow"><span className="eyebrow-line"/> VIDEO MANAGER</span>
+              <h1>Request status</h1>
+              <p className="welcome-subtitle">Follow your videos from submission through the dubbing queue.</p>
             </div>
-          </form>
-        </section>
-      </div>}
-    </main>
+            <button type="button" className="video-manager-refresh" onClick={() => void loadRequests(true)} disabled={requestsRefreshing}>
+              {requestsRefreshing ? <LoaderCircle size={15} className="spin"/> : <RefreshCw size={15}/>} Refresh
+            </button>
+          </header>
+
+          <section className="video-manager-status-metrics" aria-label="Request summary">
+            <article className="metric-card"><span className="video-manager-metric-icon"><Languages size={17}/></span><b>{requestCounts.all}</b><small>Total requests</small></article>
+            <article className="metric-card"><span className="video-manager-metric-icon pending"><Clock3 size={17}/></span><b>{requestCounts.pending}</b><small>Pending</small></article>
+            <article className="metric-card"><span className="video-manager-metric-icon working"><ArrowDownToLine size={17}/></span><b>{requestCounts.in_progress}</b><small>In progress</small></article>
+            <article className="metric-card"><span className="video-manager-metric-icon complete"><CheckCircle2 size={17}/></span><b>{requestCounts.completed}</b><small>Completed</small></article>
+          </section>
+
+          <section className="video-manager-requests panel" aria-labelledby="video-manager-requests-title">
+            <header className="panel-heading">
+              <div><span className="section-kicker">YOUR VIDEOS</span><h2 id="video-manager-requests-title">Dubbing requests <span className="heading-count">{filteredRequests.length}</span></h2></div>
+              <div className="video-manager-request-filters" role="group" aria-label="Filter requests">
+                {requestFilters.map(filter => <button key={filter.id} type="button" className={requestFilter === filter.id ? 'active' : ''} aria-pressed={requestFilter === filter.id} onClick={() => setRequestFilter(filter.id)}>{filter.label}<span>{requestCounts[filter.id]}</span></button>)}
+              </div>
+            </header>
+            {requestsError && <p className="video-manager-list-error" role="alert">{requestsError}</p>}
+            {requestsLoading ? <div className="video-manager-list-state"><LoaderCircle size={18} className="spin"/> Loading your requests…</div>
+              : filteredRequests.length === 0 ? <div className="video-manager-list-empty"><span><Languages size={20}/></span><b>{requests.length ? 'No requests in this status' : 'No video requests yet'}</b><small>{requests.length ? 'Choose another filter to see your requests.' : 'Create a dub job to see its progress here.'}</small></div>
+                : <div className="video-manager-request-list">{filteredRequests.map(request => <article className="video-manager-request-row" key={request.id}>
+                  <span className={`video-manager-request-format ${request.video_type}`}>{request.video_type === 'short' ? <Instagram size={17}/> : <Youtube size={18}/>}<small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small></span>
+                  <div className="video-manager-request-info">
+                    <div className="video-manager-request-title"><h3>{request.project_name}</h3><span className={`video-manager-request-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
+                    <p>{request.target_languages.join(' · ')}</p>
+                    <small>{new Date(request.created_at).toLocaleString()}</small>
+                  </div>
+                  <a className="video-manager-source-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={14}/></a>
+                </article>)}</div>}
+          </section>
+        </>}
+      </div>
+    </ProductDashboardShell>
   );
 }

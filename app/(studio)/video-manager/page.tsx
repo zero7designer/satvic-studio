@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, hasSupabaseConfig } from '@/lib/supabase/server';
 import VideoManagerDashboard from '@/features/video-manager/client/VideoManagerDashboard';
+import { getProfileAvatarId } from '@/features/auth/profile-avatar';
 
 export default async function VideoManagerPage() {
   if (!hasSupabaseConfig()) redirect('/login?setup=missing');
@@ -12,5 +13,8 @@ export default async function VideoManagerPage() {
   if (!profile) redirect('/onboarding');
   if (profile.role !== 'Video Manager') redirect('/dashboard/satvic-fluid');
 
-  return <VideoManagerDashboard accountEmail={user.email || ''} fullName={profile.full_name}/>;
+  return <VideoManagerDashboard
+    accountEmail={user.email || ''}
+    accountAvatar={getProfileAvatarId(user.user_metadata?.avatar_id)}
+  />;
 }

@@ -69,10 +69,10 @@ export default function IncomingVideoRequests() {
       <header className="incoming-video-requests-heading">
         <div><div className="section-kicker">VIDEO MANAGER HANDOFF</div><h2 id="incoming-video-requests-title">Incoming video requests <span className="incoming-video-count">{requests.length}</span></h2></div>
         <button type="button" className="incoming-video-refresh" onClick={() => void loadRequests(true)} disabled={refreshing} aria-label="Refresh incoming video requests">
-          {refreshing ? <LoaderCircle size={15} className="video-manager-spin"/> : <RefreshCw size={15}/>} Refresh
+          {refreshing ? <LoaderCircle size={15} className="spin"/> : <RefreshCw size={15}/>} Refresh
         </button>
       </header>
-      {loading ? <div className="incoming-video-state"><LoaderCircle size={16} className="video-manager-spin"/> Loading requests…</div>
+      {loading ? <div className="incoming-video-state"><LoaderCircle size={16} className="spin"/> Loading requests…</div>
         : <>{error && <div className="incoming-video-error" role="alert">{error}</div>}
           {requests.length === 0 ? error ? null : <div className="incoming-video-empty"><span><Clock3 size={17}/></span><div><b>No incoming requests yet</b><small>New Video Manager submissions will show here.</small></div></div>
             : <div className="incoming-video-list">{requests.map(request => <article className="incoming-video-card" key={request.id}>

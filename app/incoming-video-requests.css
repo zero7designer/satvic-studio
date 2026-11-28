@@ -1,0 +1,46 @@
+.incoming-video-requests { margin-bottom: 18px; }
+.incoming-video-requests-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 17px 13px; border-bottom: 1px solid #f0eef3; }
+.incoming-video-requests-heading h2 { margin: 5px 0 0; color: #393a35; font: 700 14px "Matter"; letter-spacing: -.25px; }
+.incoming-video-count { margin-left: 4px; padding: 3px 6px; border-radius: 6px; background: #f0f2ed; color: #777d70; font: 600 9px "Matter"; vertical-align: 2px; }
+.incoming-video-refresh { display: inline-flex; height: 29px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #e9ebe6; border-radius: 7px; background: #fff; color: #777b72; font: 500 9px "Matter"; cursor: pointer; }
+.incoming-video-refresh:disabled { opacity: .6; cursor: wait; }
+.incoming-video-state { display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 8px; color: #858980; font: 9px "Matter"; }
+.incoming-video-error { padding: 9px 16px 0; color: #ad5c52; font: 9px/1.5 "Matter"; }
+.incoming-video-empty { display: flex; min-height: 85px; align-items: center; justify-content: center; gap: 10px; color: #999d94; }
+.incoming-video-empty>span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; background: #f3f4f1; color: #858b7e; }
+.incoming-video-empty>div { display: grid; gap: 4px; }
+.incoming-video-empty b { color: #686c63; font: 600 10px "Matter"; }
+.incoming-video-empty small { color: #9a9e95; font: 8px "Matter"; }
+.incoming-video-list { display: grid; }
+.incoming-video-card { display: flex; min-height: 82px; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid #f1f0f3; }
+.incoming-video-card:last-child { border-bottom: 0; }
+.incoming-video-format { display: grid; width: 37px; height: 40px; flex: none; place-items: center; align-content: center; gap: 3px; border-radius: 9px; background: #f0eef5; color: #765f88; }
+.incoming-video-format.long { background: #f8eeee; color: #ad6459; }
+.incoming-video-format small { font: 700 6px "Matter"; letter-spacing: .5px; }
+.incoming-video-main { min-width: 0; flex: 1; }
+.incoming-video-title-row { display: flex; align-items: center; gap: 8px; }
+.incoming-video-title-row h3 { overflow: hidden; margin: 0; color: #484a44; font: 600 10px "Matter"; text-overflow: ellipsis; white-space: nowrap; }
+.incoming-video-status { flex: none; padding: 4px 6px; border-radius: 12px; background: #f8f2e7; color: #a37c48; font: 600 7px "Matter"; text-transform: capitalize; }
+.incoming-video-status.in_progress { background: #f1eff7; color: #76659d; }
+.incoming-video-status.completed { background: #edf5ef; color: #5a8869; }
+.incoming-video-main>p { overflow: hidden; margin: 4px 0 0; color: #979a92; font: 8px "Matter"; text-overflow: ellipsis; white-space: nowrap; }
+.incoming-video-languages { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 7px; }
+.incoming-video-languages b { margin-right: 2px; color: #92968d; font: 600 7px "Matter"; }
+.incoming-video-languages span { padding: 3px 5px; border-radius: 4px; background: #f3f4f1; color: #73776f; font: 8px "Matter"; }
+.incoming-video-date { display: block; margin-top: 6px; color: #a2a59e; font: 7px "Matter"; }
+.incoming-video-link { display: inline-flex; flex: none; align-items: center; gap: 5px; color: #6e7c63; font: 600 8px "Matter"; text-decoration: none; }
+.incoming-video-link:hover { color: #45553d; text-decoration: underline; }
+.incoming-video-status-action { flex: none; min-height: 28px; padding: 0 9px; border: 1px solid #dfe5da; border-radius: 7px; background: #f6f8f3; color: #68765d; font: 600 8px "Matter"; cursor: pointer; }
+.incoming-video-status-action:hover:not(:disabled) { border-color: #b7c3ab; background: #edf2e8; }
+.incoming-video-status-action:disabled { opacity: .6; cursor: wait; }
+.incoming-video-arrow { flex: none; color: #b8bbb4; }
+.incoming-video-requests .spin { animation: qa-retry-spin .9s linear infinite; }
+
+@media (max-width: 480px) {
+  .incoming-video-card { align-items: flex-start; gap: 8px; padding: 11px; }
+  .incoming-video-title-row { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .incoming-video-link { align-self: center; font-size: 0; }
+  .incoming-video-link svg { width: 18px; height: 18px; }
+  .incoming-video-arrow { display: none; }
+  .incoming-video-status-action { padding: 0 6px; }
+}

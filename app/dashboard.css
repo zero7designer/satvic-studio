@@ -1919,7 +1919,7 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.feature-rail-collapsed .nav-subitem>span:last-child{display:grid}
 .app-shell.feature-rail-collapsed .nav-subitem{justify-content:flex-start;gap:9px;padding:4px 8px}
 .app-shell.feature-rail-collapsed .nav-subitem-icon{width:27px;height:27px}
-.workflow-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0 0 22px}
+.workflow-overview-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:16px;margin:0 0 22px}
 .workflow-tasks-panel,.workflow-calendar-panel{display:flex;min-width:0;flex-direction:column;overflow:hidden;padding:0;border:1px solid #e5ebe5;border-radius:15px;background:#ffffffd9;box-shadow:0 8px 24px #506b580c}
 .workflow-overview-heading{display:flex;min-height:62px;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid #edf0eb}
 .workflow-overview-title{display:flex;min-width:0;align-items:center;gap:10px}

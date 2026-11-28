@@ -10,8 +10,8 @@ import FeedbackCalendarCard from '@/features/dashboard/client/FeedbackCalendarCa
 import {
   Activity, AlertCircle, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, Calculator, Check, CheckCheck,
   Clock3, FileAudio, FileText, ExternalLink, Folder, FolderPlus, FolderOpen, Headphones, Languages,
-  LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Share2, ShieldCheck, Trash2,
-  Upload, X, Zap,
+  Instagram, LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Share2, ShieldCheck,
+  Trash2, Upload, X, Youtube, Zap,
 } from 'lucide-react';
 import { qaJobProjectStatus, qaProjectStatus } from '@/lib/qa/review-status';
 
@@ -19,6 +19,7 @@ type Issue = { title: string; detail: string; time?: string; source?: string; se
 type Project = { title: string; source: string; target: string; status: 'Needs review' | 'In progress' | 'Ready' | 'Failed' | 'Example'; issues: number; date: string; createdAt?: string; color: string; initials: string; jobId?: string; folderId?: string; completedSeconds?: number; sourceDurationSeconds?: number; workflowMode?: 'sarvam' | 'review'; errorMessage?: string; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; dubbedAvailable?: boolean; isExample?: boolean; readOnly?: boolean };
 type VideoFormType = 'short' | 'long';
 type ProjectFolder = { id: string; name: string; created_at: string; video_type: VideoFormType | null; feedback_form_url?: string | null; feedback_sheet_url?: string | null; is_shared: boolean; is_owner: boolean };
+type FolderProgress = { total: number; dubbed: number; qaReports: number; inProgress: number; needsReview: number; failed: number };
 type TranscriptSegment = { start: number; end: number; text: string; words?: { start: number; end: number; text: string }[] };
 type AnalysisReport = { project: string; sourceLanguage: string; targetLanguage: string; createdAt: string; originalTranscript: string; dubbedTranscript: string; dubSubtitleTranscript?: string; dubSubtitleSegments?: TranscriptSegment[]; backTranslation: string; findings: Issue[]; disclaimer: string; originalSegments: TranscriptSegment[]; dubbedSegments: TranscriptSegment[]; timestampsAvailable: boolean; transcriptionEngine: string; semanticReviewEngine: string | null; transcriptCrossCheckAvailable: boolean; transcriptCrossCheckError?: string | null; audioReviewCompleted?: boolean; audioReviewEngine?: string; audioReviewFindingCount?: number; audioReviewChunkCount?: number; videoReviewCompleted?: boolean; videoReviewEngine?: string; videoReviewFindingCount?: number; transcriptReviewChunkCount?: number; reviewCoverageWarnings?: string[]; reviewComplete?: boolean; generatedBySarvam?: boolean; originalVideoUrl?: string | null; dubbedVideoUrl?: string | null; originalB2Key?: string | null; dubbedB2Key?: string | null; reportB2Key?: string | null };
 type Preflight = { fingerprint: string; geminiModel: string; cleanupNeeded: boolean; storage: { availableBytes: number; requiredBytes: number; cleanedBytes?: number }; limitations: string; durationSeconds?: number };
@@ -27,6 +28,7 @@ type SpeakerProviderOutcome = { result: SpeakerProviderResult | null; error: str
 type SpeakerDetection = { gemini: SpeakerProviderOutcome; deepgram: SpeakerProviderOutcome };
 
 const initialProjects: Project[] = [];
+const emptyFolderProgress: FolderProgress = { total: 0, dubbed: 0, qaReports: 0, inProgress: 0, needsReview: 0, failed: 0 };
 const exampleProject: Project = { title: 'Hindi–Marathi', source: 'Hindi', target: 'Marathi', status: 'Example', issues: 0, date: 'Shared demo', color: 'lilac', initials: 'HI', isExample: true };
 const issues: Issue[] = [];
 
@@ -80,6 +82,15 @@ const remainingEstimate = (range: { min: number; max: number } | null, elapsed: 
 
 function SarvamLogoMark() {
   return <span className="sarvam-mark-wrap"><img className="sarvam-mark" src="/sarvamlogo.svg" alt="" aria-hidden="true" /></span>;
+}
+
+function FolderPlatformBadges({ videoType }: { videoType: VideoFormType }) {
+  return <span className="folder-platforms" role="group" aria-label={videoType === 'short' ? 'Short-form platforms' : 'Long-form platform'}>
+    {videoType === 'short' ? <>
+      <span className="folder-platform-badge instagram"><Instagram size={13} aria-hidden="true"/> Instagram Reels</span>
+      <span className="folder-platform-badge youtube"><Youtube size={13} aria-hidden="true"/> YouTube Shorts</span>
+    </> : <span className="folder-platform-badge youtube"><Youtube size={13} aria-hidden="true"/> YouTube</span>}
+  </span>;
 }
 
 async function readApiJson(response: Response): Promise<Record<string, any>> {
@@ -143,7 +154,9 @@ function readRemoteMediaDuration(url: string): Promise<number> {
 export default function SatvicFluidDashboard({ initialAccountEmail = '', initialAccountAvatar = 'sage', initialAccountUserId }: { initialAccountEmail?: string; initialAccountAvatar?: string; initialAccountUserId: string }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
+  const [jobHistoryState, setJobHistoryState] = useState<'loading' | 'ready' | 'error'>('loading');
   const projectsRef = useRef(projects);
+  const jobHistoryLoaded = useRef(false);
   const jobsRefreshInFlight = useRef(false);
   const [folders, setFolders] = useState<ProjectFolder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(true);
@@ -392,7 +405,11 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           const status: Project['status'] = qaJobProjectStatus({ status: job.status, issueCount: job.issue_count, errorMessage: job.error_message });
           return { title: job.project_name, source: job.source_language, target: job.target_language, status, issues: job.issue_count || 0, date: new Date(job.created_at).toLocaleDateString(), createdAt: job.created_at, color: 'lilac', initials: job.project_name.slice(0, 2).toUpperCase(), jobId: job.run_id || job.id, folderId: job.folder_id || undefined, workflowMode: job.run_id ? 'sarvam' as const : 'review' as const, originalVideoUrl: job.original_video_url || null, dubbedAvailable: Boolean(job.dubbed_available), completedSeconds: (job.status === 'completed' || job.status === 'failed') && Number.isFinite(completionMs) && completionMs >= 0 ? Math.round(completionMs / 1000) : undefined, errorMessage: cleanCompletedJob ? undefined : job.error_message || undefined, readOnly: Boolean(job.read_only) };
         })]);
-      } catch { /* Keep the current dashboard visible if history is temporarily unavailable. */ }
+        jobHistoryLoaded.current = true;
+        setJobHistoryState('ready');
+      } catch {
+        if (active && !jobHistoryLoaded.current) setJobHistoryState('error');
+      }
       finally { jobsRefreshInFlight.current = false; }
     };
     void refreshJobs(true);
@@ -494,6 +511,21 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }), [projects, query, activeFolderId, selectedMapState]);
 
   const folderProjects = activeFolderId ? projects.filter(project => project.folderId === activeFolderId && !project.isExample) : projects.filter(project => !project.isExample);
+  const folderProgress = useMemo(() => {
+    const progressByFolder = new Map<string, FolderProgress>();
+    for (const project of projects) {
+      if (project.isExample || !project.folderId) continue;
+      const progress = progressByFolder.get(project.folderId) || { ...emptyFolderProgress };
+      progress.total++;
+      if (project.dubbedAvailable) progress.dubbed++;
+      if (project.status === 'Ready' || project.status === 'Needs review') progress.qaReports++;
+      if (project.status === 'In progress') progress.inProgress++;
+      if (project.status === 'Needs review') progress.needsReview++;
+      if (project.status === 'Failed') progress.failed++;
+      progressByFolder.set(project.folderId, progress);
+    }
+    return progressByFolder;
+  }, [projects]);
   const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
   const readOnlyContext = Boolean((activeFolder && !activeFolder.is_owner) || details?.readOnly || projects.find(project => project.jobId === projectMenuId)?.readOnly);
   useEffect(() => {
@@ -1506,12 +1538,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       </section></div>}
       {folderDialogOpen && <div className="modal-backdrop folder-create-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!folderSaving)setFolderDialogOpen(false)}}><form className="folder-create-modal" onSubmit={createFolder}>
         <button type="button" className="modal-close icon-btn" onClick={()=>{if(!folderSaving)setFolderDialogOpen(false)}} aria-label="Close"><X size={18}/></button><span className="folder-create-icon"><FolderPlus size={19}/></span><div className="section-kicker">ORGANIZE YOUR VIDEOS</div><h2>New folder</h2><p className="modal-intro">Group dubbed videos and their QA findings in one place.</p>
-        <div className="folder-video-type-choice" role="group" aria-label="Folder video format"><button type="button" className={cx('folder-video-type-option',folderVideoType==='short'&&'selected')} aria-pressed={folderVideoType==='short'} onClick={()=>setFolderVideoType('short')}><b>Short-form</b><small>Shorts and Reels</small></button><button type="button" className={cx('folder-video-type-option',folderVideoType==='long'&&'selected')} aria-pressed={folderVideoType==='long'} onClick={()=>setFolderVideoType('long')}><b>Long-form</b><small>Full-length videos</small></button></div>
+        <div className="folder-video-type-choice" role="group" aria-label="Folder video format"><button type="button" className={cx('folder-video-type-option',folderVideoType==='short'&&'selected')} aria-pressed={folderVideoType==='short'} onClick={()=>setFolderVideoType('short')}><b>Short-form</b><small>Reels and Shorts</small><FolderPlatformBadges videoType="short"/></button><button type="button" className={cx('folder-video-type-option',folderVideoType==='long'&&'selected')} aria-pressed={folderVideoType==='long'} onClick={()=>setFolderVideoType('long')}><b>Long-form</b><small>Full-length videos</small><FolderPlatformBadges videoType="long"/></button></div>
         <label className="field-label">Folder name<input className="text-input" autoFocus value={folderName} onChange={event=>setFolderName(event.target.value)} maxLength={80} placeholder="e.g. How much protein in milk?" required /></label>
         {folderError&&<div className="auth-error folder-create-error" role="alert">{folderError}</div>}
         <div className="folder-create-actions"><button type="button" className="secondary-btn" onClick={()=>setFolderDialogOpen(false)} disabled={folderSaving}>Cancel</button><button type="submit" className="primary-btn" disabled={folderSaving||!folderVideoType}>{folderSaving?<><span className="spinner"/> Creating folder…</>:<><FolderPlus size={15}/> Create folder</>}</button></div>
       </form></div>}
-      {folderTypeAssignmentId && <div className="modal-backdrop folder-create-backdrop" role="presentation"><section className="folder-create-modal folder-type-assignment-modal" role="dialog" aria-modal="true" aria-labelledby="folder-type-assignment-title"><span className="folder-create-icon"><Folder size={19}/></span><div className="section-kicker">ONE-TIME FOLDER SETUP</div><h2 id="folder-type-assignment-title">Choose a format for “{folders.find(folder=>folder.id===folderTypeAssignmentId)?.name || 'this folder'}”</h2><p className="modal-intro">Choose where this existing folder belongs. You only need to do this once.</p><div className="folder-video-type-choice" role="group" aria-label="Folder video format"><button type="button" className="folder-video-type-option" disabled={folderTypeAssignmentSaving} onClick={()=>void assignFolderVideoType('short')}><b>Short-form</b><small>Shorts and Reels</small></button><button type="button" className="folder-video-type-option" disabled={folderTypeAssignmentSaving} onClick={()=>void assignFolderVideoType('long')}><b>Long-form</b><small>Full-length videos</small></button></div><button type="button" className="folder-type-later" onClick={()=>setFolderTypeAssignmentId(null)} disabled={folderTypeAssignmentSaving}>Choose later</button></section></div>}
+      {folderTypeAssignmentId && <div className="modal-backdrop folder-create-backdrop" role="presentation"><section className="folder-create-modal folder-type-assignment-modal" role="dialog" aria-modal="true" aria-labelledby="folder-type-assignment-title"><span className="folder-create-icon"><Folder size={19}/></span><div className="section-kicker">ONE-TIME FOLDER SETUP</div><h2 id="folder-type-assignment-title">Choose a format for “{folders.find(folder=>folder.id===folderTypeAssignmentId)?.name || 'this folder'}”</h2><p className="modal-intro">Choose where this existing folder belongs. You only need to do this once.</p><div className="folder-video-type-choice" role="group" aria-label="Folder video format"><button type="button" className="folder-video-type-option" disabled={folderTypeAssignmentSaving} onClick={()=>void assignFolderVideoType('short')}><b>Short-form</b><small>Reels and Shorts</small><FolderPlatformBadges videoType="short"/></button><button type="button" className="folder-video-type-option" disabled={folderTypeAssignmentSaving} onClick={()=>void assignFolderVideoType('long')}><b>Long-form</b><small>Full-length videos</small><FolderPlatformBadges videoType="long"/></button></div><button type="button" className="folder-type-later" onClick={()=>setFolderTypeAssignmentId(null)} disabled={folderTypeAssignmentSaving}>Choose later</button></section></div>}
       {renameFolderOpen && activeFolderId && <div className="modal-backdrop folder-create-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!renameFolderSaving)setRenameFolderOpen(false)}}><form className="folder-create-modal" role="dialog" aria-modal="true" aria-labelledby="rename-folder-title" onSubmit={renameActiveFolder}>
         <button type="button" className="modal-close icon-btn" onClick={()=>{if(!renameFolderSaving)setRenameFolderOpen(false)}} aria-label="Close rename folder dialog"><X size={18}/></button><span className="folder-create-icon"><Pencil size={18}/></span><div className="section-kicker">PROJECT FOLDER</div><h2 id="rename-folder-title">Rename folder</h2><p className="modal-intro">Update the name for this folder. Its videos and feedback links will stay in place.</p>
         <label className="field-label">Folder name<input className="text-input" autoFocus value={renameFolderName} onChange={event=>setRenameFolderName(event.target.value)} maxLength={80} required /></label>
@@ -1569,8 +1601,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folders.length}</span></h3></div><div className="project-tools"><button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(null);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
             {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className="folder-library-grid">
               {([
-                { type: 'short' as const, title: 'Short form', subtitle: 'Shorts and Reels', empty: 'Short-form project folders will appear here.' },
-                { type: 'long' as const, title: 'Long form', subtitle: 'Full-length videos', empty: 'Long-form project folders will appear here.' },
+                { type: 'short' as const, title: 'Short form', empty: 'Short-form project folders will appear here.' },
+                { type: 'long' as const, title: 'Long form', empty: 'Long-form project folders will appear here.' },
               ]).map(section => {
                 const sectionFolders = folders.filter(folder => (folder.video_type ?? 'short') === section.type);
                 return <section
@@ -1580,17 +1612,42 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                   onDragLeave={event => { if (event.currentTarget === event.target) setDragOverVideoType(null); }}
                   onDrop={event => dropFolder(event, section.type)}
                 >
-                  <header><div><b>{section.title}</b><small>{section.subtitle}</small></div><span>{sectionFolders.length}</span></header>
-                  {sectionFolders.map(folder => <button
-                    type="button"
-                    className={cx('folder-library-card', draggedFolderId === folder.id && 'dragging')}
-                    key={folder.id}
-                    draggable={folder.is_owner}
-                    onDragStart={event => { if (folder.is_owner) startFolderDrag(event, folder.id); }}
-                    onDragEnd={() => { setDraggedFolderId(null); setDragOverVideoType(null); }}
-                    onClick={() => { setActiveFolderId(folder.id); setActiveTab('All projects'); }}
-                    aria-label={`${folder.name}, ${section.title}. Drag to move to the other format, or open folder.`}
-                  ><Folder size={19}/><span><b>{folder.name}</b><small>{projects.filter(project => project.folderId === folder.id && !project.isExample).length} videos{folder.is_shared ? ' · Shared with all' : folder.is_owner ? ' · Drag to move' : ''}</small></span><ArrowRight size={16}/></button>)}
+                  <header><div><b>{section.title}</b><FolderPlatformBadges videoType={section.type}/></div><span>{sectionFolders.length}</span></header>
+                  {sectionFolders.map(folder => {
+                    const progress = folderProgress.get(folder.id) || emptyFolderProgress;
+                    const progressAvailable = jobHistoryState === 'ready';
+                    const qaPercent = progressAvailable && progress.total ? Math.round(progress.qaReports / progress.total * 100) : 0;
+                    const statusDetails = [
+                      progress.inProgress && `${progress.inProgress} in progress`,
+                      progress.needsReview && `${progress.needsReview} need review`,
+                      progress.failed && `${progress.failed} failed`,
+                    ].filter(Boolean).join(' · ');
+                    const progressLabel = !progressAvailable
+                      ? jobHistoryState === 'loading' ? 'Loading video progress…' : 'Progress unavailable'
+                      : progress.total === 0 ? 'No videos sent yet' : statusDetails || 'QA reports available for all videos';
+                    return <button
+                      type="button"
+                      className={cx('folder-library-card', draggedFolderId === folder.id && 'dragging')}
+                      key={folder.id}
+                      draggable={folder.is_owner}
+                      onDragStart={event => { if (folder.is_owner) startFolderDrag(event, folder.id); }}
+                      onDragEnd={() => { setDraggedFolderId(null); setDragOverVideoType(null); }}
+                      onClick={() => { setActiveFolderId(folder.id); setActiveTab('All projects'); }}
+                      aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports` : progressLabel}${folder.is_owner ? '. Drag to move to the other format, or open folder.' : '. Open folder.'}`}
+                    >
+                      <Folder size={19}/>
+                      <span>
+                        <b>{folder.name}</b>
+                        <span className="folder-library-metrics">
+                          <span><b>{progressAvailable ? `${progress.dubbed}/${progress.total}` : '—'}</b><small>dubbed</small></span>
+                          <span><b>{progressAvailable ? `${progress.qaReports}/${progress.total}` : '—'}</b><small>QA reports</small></span>
+                        </span>
+                        {progressAvailable && <span className="folder-library-meter" aria-hidden="true"><span style={{ width: `${qaPercent}%` }}/></span>}
+                        <small className="folder-library-status">{progressLabel}</small>
+                      </span>
+                      <ArrowRight size={16}/>
+                    </button>;
+                  })}
                   {!sectionFolders.length && <div className="folder-type-empty">{draggedFolderId ? 'Drop folder here to move it.' : section.empty}</div>}
                 </section>;
               })}

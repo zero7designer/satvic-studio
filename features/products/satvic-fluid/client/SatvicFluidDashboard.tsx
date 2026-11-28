@@ -337,7 +337,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not create this project.');
       const folder = body.folder as ProjectFolder;
-      setFolders(current => [...current, folder]);
+      setFolders(current => [folder, ...current.filter(item => item.id !== folder.id)]);
       setActiveFolderId(folder.id);
       setWorkflowProjectName('');
       continueWorkflowInProject(folder.id);
@@ -416,7 +416,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         if (!active) return;
         if (!response.ok) throw new Error(body.error || 'Could not load folders.');
         const loadedFolders = Array.isArray(body.folders) ? body.folders as ProjectFolder[] : [];
-        setFolders(loadedFolders.map(folder => ({ ...folder, video_type: folder.video_type ?? 'short' })));
+        setFolders(loadedFolders.map(folder => ({ ...folder, video_type: folder.video_type ?? 'short' })).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
       })
       .catch(error => { if (active) setNotice(error instanceof Error ? error.message : 'Could not load folders.'); })
       .finally(() => { if (active) setFoldersLoading(false); });
@@ -1176,7 +1176,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not create this folder.');
       const folder = body.folder as ProjectFolder;
-      setFolders(current => [...current, folder]);
+      setFolders(current => [folder, ...current.filter(item => item.id !== folder.id)]);
       setActiveFolderId(folder.id);
       setProjectFolderId(folder.id);
       setFolderName('');
@@ -1481,7 +1481,9 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   }
 
   const folderLibraryVideoTypes: VideoFormType[] = workflowDashboardOpen ? [selectedVideoType] : ['short', 'long'];
-  const folderLibraryFolders = folders.filter(folder => folderLibraryVideoTypes.includes(folder.video_type || 'short'));
+  const folderLibraryFolders = folders
+    .filter(folder => folderLibraryVideoTypes.includes(folder.video_type || 'short'))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
   return (
     <ProductDashboardShell
@@ -1568,7 +1570,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             </section>
           </section>}
           {!costEstimatePage && workflowDashboardOpen && <section className="welcome-row">
-            <div><h1>{activeFolderId ? activeFolder?.name : isSarvamWorkflow ? 'Create a dub in your target language, then review it' : 'Review your existing dub against its original'}</h1>{activeFolderId && <><p className="welcome-subtitle">Dub videos and QA findings saved in this project.</p>{activeFolder?.source_url && <div className="folder-request-details"><a href={activeFolder.source_url} target="_blank" rel="noopener noreferrer">Open requested source <ExternalLink size={13}/></a>{activeFolder.target_languages?.length ? <div className="folder-request-languages"><span>Requested languages</span>{activeFolder.target_languages.map(language => <span className="folder-request-language" key={language}>{language}</span>)}</div> : null}</div>}</>}</div>
+            <div><h1>{activeFolderId ? activeFolder?.name : isSarvamWorkflow ? 'Create a dub in your target language, then review it' : 'Review your existing dub against its original'}</h1>{activeFolderId && <p className="welcome-subtitle">Dub videos and QA findings saved in this project.</p>}</div>
             <div className="welcome-actions">
               {activeFolderId && <>
                 <button type="button" className="folder-back-button" onClick={()=>{setActiveFolderId(null);setActiveTab('All projects')}}><ArrowLeft size={15}/> Back to projects</button>
@@ -1586,8 +1588,16 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             </div>
           </section>}
 
+      {!costEstimatePage && workflowDashboardOpen && activeFolder?.source_url && <section className="folder-request-details" aria-label="Video Manager request details">
+        <a href={activeFolder.source_url} target="_blank" rel="noopener noreferrer">Open requested source <ExternalLink size={14}/></a>
+        {activeFolder.target_languages?.length ? <div className="folder-request-languages">
+          <span className="folder-request-language-label">Requested languages <b>{activeFolder.target_languages.length}</b></span>
+          <div className="folder-request-language-list">{activeFolder.target_languages.map(language => <span className="folder-request-language" key={language}>{language}</span>)}</div>
+        </div> : null}
+      </section>}
+
       {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <section className="workflow-overview-grid" aria-label={`${selectedVideoType === 'short' ? 'Short-form' : 'Long-form'} incoming video requests`}>
-        <IncomingVideoRequests videoType={selectedVideoType} selectedDate={selectedTaskDate} onRequestsChange={setIncomingRequests} onFolderCreated={(folder: IncomingVideoProjectFolder) => setFolders(current => [...current.filter(item => item.id !== folder.id), folder])}/>
+        <IncomingVideoRequests videoType={selectedVideoType} selectedDate={selectedTaskDate} onRequestsChange={setIncomingRequests} onFolderCreated={(folder: IncomingVideoProjectFolder) => setFolders(current => [folder, ...current.filter(item => item.id !== folder.id)])}/>
 
         <section className="workflow-calendar-panel panel" aria-label="Filter incoming requests by date">
           <header className="workflow-overview-heading">

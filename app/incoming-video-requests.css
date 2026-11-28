@@ -19,17 +19,17 @@
 .incoming-video-empty>div { display: grid; gap: 5px; }
 .incoming-video-empty b { color: #555c51; font: 600 11px "Matter"; }
 .incoming-video-empty small { color: #858b81; font: 9px/1.45 "Matter"; }
-.incoming-video-list { display: flex; min-height: 0; flex: 1; flex-direction: column; max-height: 420px; overflow: auto; scrollbar-width: thin; }
-.incoming-video-card { display: grid; min-height: 156px; flex: 1; grid-template-columns: 54px minmax(0, 1fr) auto; grid-template-areas: "format main actions"; align-items: center; gap: 14px; padding: 20px 22px; border-bottom: 1px solid #f1f0f3; }
-.incoming-video-card:last-child { border-bottom: 0; }
+.incoming-video-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 10px; max-height: 420px; overflow: auto; padding: 4px 14px 14px; scrollbar-width: thin; }
+.incoming-video-card { display: grid; min-height: 0; flex: 0 0 auto; grid-template-columns: 54px minmax(0, 1fr); grid-template-areas: "format main"; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid #e8ebe5; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px #334a2b0a; }
 .incoming-video-format { display: grid; width: 52px; height: 58px; grid-area: format; place-items: center; align-content: center; gap: 5px; border: 1px solid #ebe6f0; border-radius: 12px; background: #f5f2f8; color: #765f88; }
 .incoming-video-format.long { border-color: #f0e5e3; background: #fbf3f1; color: #ad6459; }
 .incoming-video-format .video-platform-pair { gap: 3px; }
 .incoming-video-format .video-platform-pair svg { width: 18px; height: 18px; }
 .incoming-video-format>svg { width: 22px; height: 22px; }
 .incoming-video-format small { font: 700 9px "Matter"; letter-spacing: .5px; }
-.incoming-video-main { display: grid; min-width: 0; grid-area: main; gap: 1px; }
-.incoming-video-title-row { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 7px 9px; }
+.incoming-video-main { display: grid; min-width: 0; grid-area: main; gap: 3px; }
+.incoming-video-card-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; }
+.incoming-video-title-row { display: flex; min-width: 0; flex: 1 1 190px; align-items: center; flex-wrap: wrap; gap: 7px 9px; }
 .incoming-video-title-row h3 { overflow: hidden; min-width: 0; margin: 0; color: #393d37; font: 600 16px/1.35 "Matter"; text-overflow: ellipsis; }
 .incoming-video-status { flex: none; padding: 5px 9px; border-radius: 999px; background: #fbf3e5; color: #946d35; font: 600 10px "Matter"; text-transform: capitalize; }
 .incoming-video-status.in_progress { background: #f1eff7; color: #76659d; }
@@ -39,7 +39,7 @@
 .incoming-video-languages b { margin-right: 1px; color: #72796e; font: 600 11px "Matter"; }
 .incoming-video-languages span { padding: 6px 9px; border: 1px solid #e8ebe5; border-radius: 6px; background: #f7f8f6; color: #596151; font: 500 10px "Matter"; }
 .incoming-video-date { display: block; margin-top: 9px; color: #858b81; font: 10px/1.4 "Matter"; }
-.incoming-video-actions { display: flex; grid-area: actions; align-items: center; justify-self: end; gap: 9px; padding-top: 2px; }
+.incoming-video-actions { display: flex; flex: none; align-items: center; gap: 9px; }
 .incoming-video-link { display: inline-flex; min-height: 38px; flex: none; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; border: 1px solid #e4e9e1; border-radius: 8px; color: #596b50; font: 600 11px "Matter"; text-decoration: none; white-space: nowrap; }
 .incoming-video-link:hover { border-color: #c8d4c1; background: #f7faf5; color: #45553d; text-decoration: none; }
 .incoming-video-status-action { min-height: 38px; flex: none; padding: 0 14px; border: 1px solid #dfe5da; border-radius: 8px; background: #f3f7ef; color: #526247; font: 600 11px "Matter"; cursor: pointer; }
@@ -54,9 +54,10 @@
 }
 
 @media (max-width: 560px) {
-  .incoming-video-card { min-height: 156px; grid-template-columns: 46px minmax(0, 1fr); grid-template-areas: "format main" ". actions"; gap: 10px 12px; }
+  .incoming-video-card { grid-template-columns: 46px minmax(0, 1fr); gap: 10px 12px; padding: 14px; }
   .incoming-video-format { width: 44px; height: 50px; }
-  .incoming-video-actions { flex-wrap: wrap; justify-self: start; gap: 7px; padding-top: 0; }
+  .incoming-video-card-heading { align-items: flex-start; }
+  .incoming-video-actions { flex-wrap: wrap; gap: 7px; }
   .incoming-video-title-row h3 { font-size: 14px; }
 }
 

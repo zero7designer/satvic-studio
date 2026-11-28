@@ -101,16 +101,18 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                 <small>{request.video_type === 'short' ? 'SHORT' : 'LONG'}</small>
               </div>
               <div className="incoming-video-main">
-                <div className="incoming-video-title-row"><h3>{request.project_name}</h3><span className={`incoming-video-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
+                <div className="incoming-video-card-heading">
+                  <div className="incoming-video-title-row"><h3>{request.project_name}</h3><span className={`incoming-video-status ${request.status}`}>{request.status.replace('_', ' ')}</span></div>
+                  <div className="incoming-video-actions">
+                    <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={15}/></a>
+                    {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
+                      {updatingRequestId === request.id ? 'Saving…' : request.status === 'pending' ? 'Start' : 'Complete'}
+                    </button>}
+                  </div>
+                </div>
                 <p>From {request.submitter_name} · {request.submitter_email}</p>
-                <div className="incoming-video-languages"><b>Dub into</b>{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
+                <div className="incoming-video-languages"><b>Target languages</b>{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
                 <small className="incoming-video-date">{new Date(request.created_at).toLocaleString()}</small>
-              </div>
-              <div className="incoming-video-actions">
-                <a className="incoming-video-link" href={request.source_url} target="_blank" rel="noopener noreferrer">Open source <ExternalLink size={15}/></a>
-                {(request.status === 'pending' || request.status === 'in_progress') && <button className="incoming-video-status-action" type="button" disabled={updatingRequestId === request.id} onClick={() => void updateStatus(request)}>
-                  {updatingRequestId === request.id ? 'Saving…' : request.status === 'pending' ? 'Start' : 'Complete'}
-                </button>}
               </div>
             </article>)}</div>}
         </>}

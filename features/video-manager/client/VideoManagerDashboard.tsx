@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import ProductDashboardShell from '@/features/dashboard/client/ProductDashboardShell';
 import { VIDEO_MANAGER_LANGUAGES, type VideoManagerVideoType } from '@/features/video-manager/constants';
 import {
   ArrowDownToLine, ArrowRight, ArrowUpRight, Check, CheckCircle2, Clock3,
-  ExternalLink, Instagram, Languages, Link2, LoaderCircle, Plus, RefreshCw, Youtube,
+  ExternalLink, Instagram, Languages, Link2, LoaderCircle, Plus, RefreshCw, Search, Youtube,
 } from 'lucide-react';
 
 type RequestStatus = 'pending' | 'in_progress' | 'completed';
@@ -27,6 +27,19 @@ const requestFilters: { id: RequestFilter; label: string }[] = [
   { id: 'completed', label: 'Completed' },
 ];
 
+function matchesRequestQuery(request: SubmittedRequest, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return [
+    request.project_name,
+    request.video_type === 'short' ? 'short-form instagram reels youtube shorts' : 'long-form youtube',
+    request.source_url,
+    request.status.replace('_', ' '),
+    request.created_at,
+    ...request.target_languages,
+  ].some(value => value.toLowerCase().includes(normalizedQuery));
+}
+
 export default function VideoManagerDashboard({
   accountEmail,
   accountAvatar,
@@ -47,6 +60,13 @@ export default function VideoManagerDashboard({
   const [requestsRefreshing, setRequestsRefreshing] = useState(false);
   const [requestsError, setRequestsError] = useState('');
   const [requestFilter, setRequestFilter] = useState<RequestFilter>('all');
+  const [requestSearchQuery, setRequestSearchQuery] = useState('');
+  const [requestSearchOpen, setRequestSearchOpen] = useState(false);
+  const [requestSearchClosing, setRequestSearchClosing] = useState(false);
+  const [requestSearchOrigin, setRequestSearchOrigin] = useState({ x: 325, y: 30 });
+  const requestSearchInputRef = useRef<HTMLInputElement>(null);
+  const requestSearchTriggerRef = useRef<HTMLButtonElement>(null);
+  const requestSearchCloseTimerRef = useRef<number | null>(null);
 
   const loadRequests = useCallback(async (refresh = false) => {
     if (refresh) setRequestsRefreshing(true);
@@ -70,9 +90,70 @@ export default function VideoManagerDashboard({
     return () => window.clearInterval(timer);
   }, [loadRequests]);
 
+  useEffect(() => {
+    if (!requestSearchOpen) return;
+    const frame = window.requestAnimationFrame(() => requestSearchInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestSearchOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && requestSearchOpen) {
+        event.preventDefault();
+        closeRequestSearch();
+      } else if (activeView === 'request-status' && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openRequestSearch();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeView, requestSearchOpen, requestSearchClosing]);
+
+  useEffect(() => () => {
+    if (requestSearchCloseTimerRef.current !== null) window.clearTimeout(requestSearchCloseTimerRef.current);
+  }, []);
+
+  function openRequestSearch() {
+    if (requestSearchCloseTimerRef.current !== null) window.clearTimeout(requestSearchCloseTimerRef.current);
+    const trigger = requestSearchTriggerRef.current?.getBoundingClientRect();
+    if (trigger) {
+      const edgePadding = window.innerWidth <= 600 ? 10 : 18;
+      const panelWidth = Math.min(650, window.innerWidth - edgePadding * 2);
+      const panelLeft = (window.innerWidth - panelWidth) / 2;
+      const panelTop = window.innerWidth <= 600 ? 68 : Math.min(150, Math.max(70, window.innerHeight * 0.15));
+      setRequestSearchOrigin({ x: trigger.left + trigger.width / 2 - panelLeft, y: trigger.top + trigger.height / 2 - panelTop });
+    }
+    setRequestSearchClosing(false);
+    setRequestSearchOpen(true);
+  }
+
+  function closeRequestSearch() {
+    if (!requestSearchOpen || requestSearchClosing) return;
+    setRequestSearchClosing(true);
+    requestSearchCloseTimerRef.current = window.setTimeout(() => {
+      setRequestSearchOpen(false);
+      setRequestSearchClosing(false);
+      requestSearchCloseTimerRef.current = null;
+    }, 190);
+  }
+
+  function selectRequestSearchResult(request: SubmittedRequest) {
+    setRequestFilter('all');
+    setRequestSearchQuery(request.project_name);
+    closeRequestSearch();
+  }
+
+  const matchingRequests = useMemo(
+    () => requests.filter(request => matchesRequestQuery(request, requestSearchQuery)),
+    [requestSearchQuery, requests],
+  );
   const filteredRequests = useMemo(
-    () => requests.filter(request => requestFilter === 'all' || request.status === requestFilter),
-    [requestFilter, requests],
+    () => requests.filter(request =>
+      (requestFilter === 'all' || request.status === requestFilter) &&
+      matchesRequestQuery(request, requestSearchQuery),
+    ),
+    [requestFilter, requestSearchQuery, requests],
   );
   const requestCounts = useMemo(() => ({
     all: requests.length,
@@ -205,13 +286,18 @@ export default function VideoManagerDashboard({
           <section className="video-manager-requests panel" aria-labelledby="video-manager-requests-title">
             <header className="panel-heading">
               <div><span className="section-kicker">YOUR VIDEOS</span><h2 id="video-manager-requests-title">Dubbing requests <span className="heading-count">{filteredRequests.length}</span></h2></div>
-              <div className="video-manager-request-filters" role="group" aria-label="Filter requests">
-                {requestFilters.map(filter => <button key={filter.id} type="button" className={requestFilter === filter.id ? 'active' : ''} aria-pressed={requestFilter === filter.id} onClick={() => setRequestFilter(filter.id)}>{filter.label}<span>{requestCounts[filter.id]}</span></button>)}
+              <div className="video-manager-request-tools">
+                <button ref={requestSearchTriggerRef} type="button" className="search-box search-trigger video-manager-request-search" onClick={openRequestSearch} aria-haspopup="dialog" aria-expanded={requestSearchOpen}>
+                  <Search size={14}/><span>Search requests</span><kbd>⌘ K</kbd>
+                </button>
+                <div className="video-manager-request-filters" role="group" aria-label="Filter requests">
+                  {requestFilters.map(filter => <button key={filter.id} type="button" className={requestFilter === filter.id ? 'active' : ''} aria-pressed={requestFilter === filter.id} onClick={() => setRequestFilter(filter.id)}>{filter.label}<span>{requestCounts[filter.id]}</span></button>)}
+                </div>
               </div>
             </header>
             {requestsError && <p className="video-manager-list-error" role="alert">{requestsError}</p>}
             {requestsLoading ? <div className="video-manager-list-state"><LoaderCircle size={18} className="spin"/> Loading your requests…</div>
-              : filteredRequests.length === 0 ? <div className="video-manager-list-empty"><span><Languages size={20}/></span><b>{requests.length ? 'No requests in this status' : 'No video requests yet'}</b><small>{requests.length ? 'Choose another filter to see your requests.' : 'Create a dub job to see its progress here.'}</small></div>
+              : filteredRequests.length === 0 ? <div className="video-manager-list-empty"><span><Languages size={20}/></span><b>{!requests.length ? 'No video requests yet' : requestSearchQuery.trim() ? 'No matching requests' : 'No requests in this status'}</b><small>{!requests.length ? 'Create a dub job to see its progress here.' : requestSearchQuery.trim() ? 'Try another video name, language, or status.' : 'Choose another filter to see your requests.'}</small></div>
                 : filteredRequests.length > 0 && <div className="video-manager-request-table-wrap">
                   <table className="video-manager-request-table">
                     <thead><tr><th scope="col">Name</th><th scope="col">Target languages</th><th scope="col">Submitted</th><th scope="col">Status</th><th scope="col">Source</th></tr></thead>
@@ -231,6 +317,22 @@ export default function VideoManagerDashboard({
                 </div>}
           </section>
         </>}
+        {requestSearchOpen && <div className={`spotlight-backdrop${requestSearchClosing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) closeRequestSearch(); }}>
+          <section className="spotlight-panel video-manager-search-dock" role="dialog" aria-modal="true" aria-label="Search dubbing requests" style={{ transformOrigin: `${requestSearchOrigin.x}px ${requestSearchOrigin.y}px` }}>
+            <div className="spotlight-input-row"><Search size={21} aria-hidden="true"/><input ref={requestSearchInputRef} value={requestSearchQuery} onChange={event => setRequestSearchQuery(event.target.value)} placeholder="Search by video, language, status, or link…" aria-label="Search requests" onKeyDown={event => {
+              if (event.key === 'Escape') closeRequestSearch();
+              if (event.key === 'Enter' && matchingRequests[0]) selectRequestSearchResult(matchingRequests[0]);
+            }}/><button type="button" className="spotlight-escape" onClick={closeRequestSearch}>ESC</button></div>
+            <div className="spotlight-results" role="listbox" aria-label="Matching video requests">
+              <div className="spotlight-section-label">{requestSearchQuery.trim() ? `${matchingRequests.length} MATCHING REQUESTS` : 'RECENT REQUESTS'}</div>
+              {(requestSearchQuery.trim() ? matchingRequests : requests).slice(0, 8).map(request => <button type="button" key={request.id} className="spotlight-result" role="option" aria-selected="false" onClick={() => selectRequestSearchResult(request)}>
+                <span className="spotlight-folder-icon"><Languages size={16}/></span><span className="spotlight-result-copy"><b>{request.project_name}</b><small>{request.video_type === 'short' ? 'Short-form · Instagram Reels + YouTube Shorts' : 'Long-form · YouTube'} · {request.target_languages.join(', ')}</small></span><span className={`spotlight-status ${request.status.replace('_', '-')}`}>{request.status.replace('_', ' ')}</span><ArrowRight className="spotlight-result-arrow" size={16}/>
+              </button>)}
+              {!(requestSearchQuery.trim() ? matchingRequests : requests).length && <div className="spotlight-empty"><Search size={19}/><b>{requests.length ? 'No matching requests' : 'No video requests yet'}</b><span>{requests.length ? 'Try another video name, language, or status.' : 'Create a dub job to see it here.'}</span></div>}
+            </div>
+            <footer className="spotlight-footer"><span><kbd>↵</kbd> Filter requests</span><span><kbd>ESC</kbd> Close</span></footer>
+          </section>
+        </div>}
       </div>
     </ProductDashboardShell>
   );

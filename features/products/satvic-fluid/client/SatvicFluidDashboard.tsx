@@ -7,10 +7,10 @@ import { uploadPresigned } from '@vercel/blob/client';
 import ProductDashboardShell from '@/features/dashboard/client/ProductDashboardShell';
 import IndiaCommunityMapCard, { languagesForIndiaState } from '@/features/dashboard/client/IndiaCommunityMapCard';
 import FeedbackCalendarCard from '@/features/dashboard/client/FeedbackCalendarCard';
-import IncomingVideoRequests from '@/features/products/satvic-fluid/client/IncomingVideoRequests';
+import IncomingVideoRequests, { type IncomingVideoRequest } from '@/features/products/satvic-fluid/client/IncomingVideoRequests';
 import {
-  Activity, AlertCircle, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, CalendarDays, Calculator, Check, CheckCheck,
-  ChevronLeft, ChevronRight, CircleCheck, Clock3, FileAudio, FileText, ExternalLink, Folder, FolderPlus, FolderOpen, Headphones, Languages,
+  Activity, AlertCircle, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, CalendarDays, Calculator, Check, CheckCheck,
+  ChevronLeft, ChevronRight, Clock3, FileAudio, FileText, ExternalLink, Folder, FolderPlus, FolderOpen, Headphones, Languages,
   Instagram, LoaderCircle, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Share2, ShieldCheck,
   Trash2, Upload, X, Youtube, Zap,
 } from 'lucide-react';
@@ -39,9 +39,6 @@ const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMon
 const projectActivityDate = (project: Project) => project.status === 'In progress'
   ? project.createdAt
   : project.updatedAt || project.createdAt;
-const projectActivityDateKeys = (project: Project) => [...new Set([project.createdAt, project.updatedAt]
-  .filter((value): value is string => Boolean(value && Number.isFinite(Date.parse(value))))
-  .map(value => localDateKey(new Date(value))))];
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 const clipKey = (videoId: string, start: number, end?: number) => `${videoId}:${start}:${end ?? ''}`;
 function quoteTimeRange(segments: TranscriptSegment[], phrase: string) {
@@ -163,6 +160,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [jobHistoryState, setJobHistoryState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [incomingRequests, setIncomingRequests] = useState<IncomingVideoRequest[]>([]);
   const projectsRef = useRef(projects);
   const jobHistoryLoaded = useRef(false);
   const jobsRefreshInFlight = useRef(false);
@@ -280,6 +278,19 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     (project.status === 'Ready' || project.status === 'Needs review'),
   ).length, [projects]);
   const showSarvamGuide = jobHistoryState === 'ready' && completedSarvamDubs < 4;
+  const recentFormatProjects = useMemo(() => {
+    const projectFormat = (project: Project) => folders.find(folder => folder.id === project.folderId)?.video_type ?? project.videoType;
+    const recentFirst = (left: Project, right: Project) => {
+      const leftDate = Date.parse(projectActivityDate(left) || '') || 0;
+      const rightDate = Date.parse(projectActivityDate(right) || '') || 0;
+      return rightDate - leftDate;
+    };
+    const eligibleProjects = projects.filter(project => !project.isExample);
+    return {
+      short: eligibleProjects.filter(project => projectFormat(project) === 'short').sort(recentFirst),
+      long: eligibleProjects.filter(project => projectFormat(project) === 'long').sort(recentFirst),
+    };
+  }, [projects, folders]);
   const continueWorkflowInProject = (folderId: string) => {
     setGenerationMode(isSarvamWorkflow ? 'sarvam' : 'existing');
     setSpeakerCount('');
@@ -527,23 +538,16 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     return progressByFolder;
   }, [projects]);
   const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
-  const taskWorkflowMode = isSarvamWorkflow ? 'sarvam' : 'review';
-  const workflowTasks = useMemo(() => projects
-    .filter(project => {
-      if (project.isExample || project.workflowMode !== taskWorkflowMode) return false;
-      const folderType = folders.find(folder => folder.id === project.folderId)?.video_type;
-      const projectVideoType = folderType ?? project.videoType;
-      return !projectVideoType || projectVideoType === selectedVideoType;
-    })
-    .sort((left, right) => Date.parse(projectActivityDate(right) || '') - Date.parse(projectActivityDate(left) || '')),
-  [projects, folders, selectedVideoType, taskWorkflowMode]);
-  const taskCountsByDate = useMemo(() => workflowTasks.reduce<Record<string, number>>((counts, project) => {
-    for (const key of projectActivityDateKeys(project)) counts[key] = (counts[key] || 0) + 1;
+  const activeFormatRequests = useMemo(() => incomingRequests.filter(request =>
+    request.video_type === selectedVideoType && request.status !== 'completed',
+  ), [incomingRequests, selectedVideoType]);
+  const taskCountsByDate = useMemo(() => activeFormatRequests.reduce<Record<string, number>>((counts, request) => {
+    const submittedAt = Date.parse(request.created_at);
+    if (!Number.isFinite(submittedAt)) return counts;
+    const key = localDateKey(new Date(submittedAt));
+    counts[key] = (counts[key] || 0) + 1;
     return counts;
-  }, {}), [workflowTasks]);
-  const visibleWorkflowTasks = selectedTaskDate
-    ? workflowTasks.filter(project => projectActivityDateKeys(project).includes(selectedTaskDate))
-    : workflowTasks;
+  }, {}), [activeFormatRequests]);
   const taskMonthLabel = visibleTaskMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const taskMonthFirstWeekday = new Date(visibleTaskMonth.getFullYear(), visibleTaskMonth.getMonth(), 1).getDay();
   const taskMonthDays = new Date(visibleTaskMonth.getFullYear(), visibleTaskMonth.getMonth() + 1, 0).getDate();
@@ -1618,12 +1622,26 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           <div className="workflow-format-cards">
             <button type="button" className="workflow-format-card short" onClick={() => { setSelectedVideoType('short'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
               <span className="workflow-format-card-icon"><span className="video-platform-pair"><Instagram size={18}/><Youtube size={18}/></span></span>
-              <span className="workflow-format-card-copy"><small>SHORT-FORM</small><b>Instagram Reels &amp; YouTube Shorts</b><span>Vertical videos, Reels, and Shorts</span></span>
+              <span className="workflow-format-card-copy"><small>SHORT-FORM</small><b>Instagram Reels &amp; YouTube Shorts</b><span>Vertical videos, Reels, and Shorts</span>
+                <span className="workflow-format-recent"><small>RECENT VIDEOS{recentFormatProjects.short.length > 2 ? ` · ${recentFormatProjects.short.length}` : ''}</small>
+                  {jobHistoryState === 'loading' ? <span className="workflow-format-recent-empty">Loading past videos…</span> : jobHistoryState === 'error' ? <span className="workflow-format-recent-empty">Could not load past videos.</span> : recentFormatProjects.short.length ? <>
+                    {recentFormatProjects.short.slice(0, 2).map(project => <span className="workflow-format-recent-item" key={project.jobId || project.title}><span><b>{project.title}</b><small>{project.target}</small></span><span className={`workflow-format-recent-status ${project.status.toLowerCase().replace(' ', '-')}`}><i/>{project.status}</span></span>)}
+                    {recentFormatProjects.short.length > 2 && <span className="workflow-format-recent-more">Open dashboard to view all {recentFormatProjects.short.length} videos</span>}
+                  </> : <span className="workflow-format-recent-empty">No past videos yet</span>}
+                </span>
+              </span>
               <ArrowRight size={18}/>
             </button>
             <button type="button" className="workflow-format-card long" onClick={() => { setSelectedVideoType('long'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
               <span className="workflow-format-card-icon"><Youtube size={20}/></span>
-              <span className="workflow-format-card-copy"><small>LONG-FORM</small><b>YouTube videos</b><span>Full-length videos and episodes</span></span>
+              <span className="workflow-format-card-copy"><small>LONG-FORM</small><b>YouTube videos</b><span>Full-length videos and episodes</span>
+                <span className="workflow-format-recent"><small>RECENT VIDEOS{recentFormatProjects.long.length > 2 ? ` · ${recentFormatProjects.long.length}` : ''}</small>
+                  {jobHistoryState === 'loading' ? <span className="workflow-format-recent-empty">Loading past videos…</span> : jobHistoryState === 'error' ? <span className="workflow-format-recent-empty">Could not load past videos.</span> : recentFormatProjects.long.length ? <>
+                    {recentFormatProjects.long.slice(0, 2).map(project => <span className="workflow-format-recent-item" key={project.jobId || project.title}><span><b>{project.title}</b><small>{project.target}</small></span><span className={`workflow-format-recent-status ${project.status.toLowerCase().replace(' ', '-')}`}><i/>{project.status}</span></span>)}
+                    {recentFormatProjects.long.length > 2 && <span className="workflow-format-recent-more">Open dashboard to view all {recentFormatProjects.long.length} videos</span>}
+                  </> : <span className="workflow-format-recent-empty">No past videos yet</span>}
+                </span>
+              </span>
               <ArrowRight size={18}/>
             </button>
           </div>
@@ -1655,31 +1673,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             </div>
           </section>}
 
-      {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <section className="workflow-overview-grid" aria-label={`${selectedVideoType === 'short' ? 'Short-form' : 'Long-form'} workflow activity`}>
-        <section className="workflow-tasks-panel panel" aria-labelledby="workflow-tasks-title">
-          <header className="workflow-overview-heading">
-            <div className="workflow-overview-title"><span><Bell size={16}/></span><div><span className="section-kicker">VIDEO MANAGER HANDOFF</span><h2 id="workflow-tasks-title">Incoming video requests</h2></div></div>
-            <span className="workflow-task-total">{visibleWorkflowTasks.length} {visibleWorkflowTasks.length === 1 ? 'job' : 'jobs'}</span>
-          </header>
-          <p className="workflow-overview-caption">{selectedTaskDate ? `Activity for ${new Date(`${selectedTaskDate}T12:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}` : 'Latest dubbing and review jobs. Use the calendar to filter by activity date.'}</p>
-          {jobHistoryState === 'loading' ? <div className="workflow-task-state"><LoaderCircle size={16} className="spin"/> Loading job activity…</div>
-            : jobHistoryState === 'error' ? <div className="workflow-task-state error">Could not load job activity. Refresh the dashboard and try again.</div>
-              : visibleWorkflowTasks.length ? <div className="workflow-task-list">{visibleWorkflowTasks.map(project => {
-                const activityDate = projectActivityDate(project);
-                const done = project.status === 'Ready' || project.status === 'Needs review';
-                const projectVideoType = folders.find(folder => folder.id === project.folderId)?.video_type ?? project.videoType;
-                return <button type="button" className="workflow-task-row" key={project.jobId || project.title} onClick={() => { setDetails(project); setReportPage(false); }}>
-                  <span className={`workflow-task-status ${project.status.toLowerCase().replace(' ', '-')}`}>{done ? <CircleCheck size={15}/> : project.status === 'Failed' ? <AlertCircle size={15}/> : <Clock3 size={15}/>}</span>
-                  <span className="workflow-task-copy"><b>{project.title}</b><small>{project.source} → {project.target} · {project.status} · {projectVideoType ? <span className="workflow-task-format">{projectVideoType === 'short' ? <span className="video-platform-pair"><Instagram size={10}/><Youtube size={10}/></span> : <Youtube size={10}/>} {projectVideoType === 'short' ? 'Short-form' : 'Long-form'}</span> : 'Format not recorded'}</small></span>
-                  <time>{activityDate && Number.isFinite(Date.parse(activityDate)) ? new Date(activityDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</time>
-                </button>;
-              })}</div>
-                : <div className="workflow-task-empty"><span>{selectedTaskDate ? 'No job activity on this date.' : 'No jobs for this format yet.'}</span>{selectedTaskDate && <button type="button" onClick={() => setSelectedTaskDate(null)}>Show all activity</button>}</div>}
-        </section>
+      {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <section className="workflow-overview-grid" aria-label={`${selectedVideoType === 'short' ? 'Short-form' : 'Long-form'} incoming video requests`}>
+        <IncomingVideoRequests videoType={selectedVideoType} selectedDate={selectedTaskDate} onRequestsChange={setIncomingRequests}/>
 
-        <section className="workflow-calendar-panel panel" aria-label="Filter task activity by date">
+        <section className="workflow-calendar-panel panel" aria-label="Filter incoming requests by date">
           <header className="workflow-overview-heading">
-            <div className="workflow-overview-title"><span><CalendarDays size={16}/></span><div><span className="section-kicker">ACTIVITY CALENDAR</span><h2>{taskMonthLabel}</h2></div></div>
+            <div className="workflow-overview-title"><span><CalendarDays size={16}/></span><div><span className="section-kicker">REQUEST CALENDAR</span><h2>{taskMonthLabel}</h2></div></div>
             <div className="workflow-calendar-controls"><button type="button" aria-label="Previous month" onClick={() => { setVisibleTaskMonth(month => new Date(month.getFullYear(), month.getMonth() - 1, 1)); setSelectedTaskDate(null); }}><ChevronLeft size={16}/></button><button type="button" aria-label="Next month" onClick={() => { setVisibleTaskMonth(month => new Date(month.getFullYear(), month.getMonth() + 1, 1)); setSelectedTaskDate(null); }}><ChevronRight size={16}/></button></div>
           </header>
           <div className="workflow-calendar-grid" role="grid" aria-label={taskMonthLabel}>
@@ -1690,10 +1689,10 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
               const dateKey = localDateKey(new Date(visibleTaskMonth.getFullYear(), visibleTaskMonth.getMonth(), day));
               const count = taskCountsByDate[dateKey] || 0;
               const today = dateKey === localDateKey(new Date());
-              return <button type="button" role="gridcell" key={dateKey} className={`workflow-calendar-day${count ? ' has-activity' : ''}${today ? ' today' : ''}`} aria-label={`${dateKey}${count ? `, ${count} job activities` : ', no job activity'}`} aria-pressed={selectedTaskDate === dateKey} onClick={() => setSelectedTaskDate(dateKey)}><span>{day}</span>{count > 0 && <i>{count > 9 ? '9+' : count}</i>}</button>;
+              return <button type="button" role="gridcell" key={dateKey} className={`workflow-calendar-day${count ? ' has-activity' : ''}${today ? ' today' : ''}`} aria-label={`${dateKey}${count ? `, ${count} active requests` : ', no active requests'}`} aria-pressed={selectedTaskDate === dateKey} onClick={() => setSelectedTaskDate(dateKey)}><span>{day}</span>{count > 0 && <i>{count > 9 ? '9+' : count}</i>}</button>;
             })}
           </div>
-          <footer className="workflow-calendar-footer"><span>Choose a date to view jobs started or completed that day.</span>{selectedTaskDate && <button type="button" onClick={() => setSelectedTaskDate(null)}>Clear date</button>}</footer>
+          <footer className="workflow-calendar-footer"><span>Choose a date to view active requests submitted that day.</span>{selectedTaskDate && <button type="button" onClick={() => setSelectedTaskDate(null)}>Clear date</button>}</footer>
         </section>
       </section>}
 
@@ -1758,8 +1757,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
           </div>
         </div>}
       </section>}
-
-      {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <IncomingVideoRequests/>}
 
           {!costEstimatePage && workflowDashboardOpen && activeFolderId && <section className="work-grid folder-work-grid"><div className="projects-panel panel"><div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>{activeFolderId ? folders.find(folder=>folder.id===activeFolderId)?.name : "Recent projects"} <span className="heading-count">{visibleProjects.length}</span></h3></div><button ref={searchTriggerRef} type="button" className="search-box search-trigger folder-project-search" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button></div>{!activeFolderId && <section className="workspace-folders" aria-label="Project folders"><div className="workspace-folders-heading"><span>FOLDERS</span><button type="button" onClick={()=>{setFolderError("");setFolderName("");setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div><div className="workspace-folder-list"><button type="button" className={"workspace-folder"+(activeFolderId===null?" active":"")} onClick={()=>{setActiveFolderId(null);setActiveTab("All projects")}}><FolderOpen size={16}/><span>All videos</span><small>{projects.filter(project=>!project.isExample).length}</small></button>{folders.map(folder=><button type="button" key={folder.id} className={"workspace-folder"+(activeFolderId===folder.id?" active":"")} onClick={()=>{setActiveFolderId(folder.id);setActiveTab("All projects")}}><Folder size={16}/><span>{folder.name}</span><small>{projects.filter(project=>project.folderId===folder.id&&!project.isExample).length}</small></button>)}{foldersLoading&&<span className="workspace-folders-loading">Loading folders…</span>}</div></section>}<div className="project-table-wrap"><table className="project-table"><thead><tr><th scope="col">Name</th><th scope="col">Target language</th><th scope="col">Estimated time</th><th scope="col">Status</th><th scope="col">Download</th><th scope="col" aria-label="Actions"/></tr></thead><tbody>{visibleProjects.length ? visibleProjects.map((p)=><tr className={cx('project-table-row',p.isExample&&'example-project-row')} key={p.isExample?'shared-example':`${p.jobId || p.title}`} onClick={()=>{if(p.isExample){setNotice('This is a shared sample project. No video or QA report is attached.');return;}setProjectMenuId(null);setReport(null);setDetails(p)}}><td data-label="Name"><div className="project-table-name"><div className={`project-thumb ${p.color}`}><span>{p.initials}</span><div className="thumb-play"><Play size={10} fill="currentColor"/></div></div><span><button type="button" className="project-open" onClick={event=>{event.stopPropagation();if(p.isExample){setNotice('This is a shared sample project. No video or QA report is attached.');return;}setProjectMenuId(null);setReport(null);setDetails(p)}}><b>{p.title}</b>{p.isExample&&<span className="example-project-badge">Example</span>}</button><small>{p.source}{p.date ? <> · {p.date}</> : null}</small></span></div></td><td data-label="Target language"><span className="project-language-chip">{p.target}</span></td><td data-label="Estimated time" className="project-created-cell" title={p.completedSeconds ? `Actual processing time: ${formatDuration(p.completedSeconds)}` : undefined}>{p.completedSeconds ? formatDuration(p.completedSeconds) : ((costDurations[p.jobId || p.title] || (p.sourceDurationSeconds ? (p.sourceDurationSeconds / 60).toFixed(2) : "")) ? `~${estimateWorkflowTime(Number(costDurations[p.jobId || p.title] || (p.sourceDurationSeconds || 0) / 60))}` : "—")}</td><td data-label="Status"><span className={cx('status-pill',p.status.toLowerCase().replace(' ','-'))}><i/>{p.status}</span></td><td data-label="Download"><button type="button" className="project-download-button" disabled={!p.dubbedAvailable||p.status==='In progress'||p.isExample||downloadingProjectId===p.jobId} onClick={event=>{event.stopPropagation();void downloadProjectDub(p)}}>{downloadingProjectId===p.jobId?<LoaderCircle size={15} className="spin"/>:<ArrowDownToLine size={15}/>} {downloadingProjectId===p.jobId?'Preparing?':'Download'}</button></td><td data-label="Actions">{!p.isExample&&<div className="project-actions" onClick={event=>event.stopPropagation()}><button type="button" className="row-more" aria-label={`Actions for ${p.title}`} aria-expanded={projectMenuId===p.jobId} onClick={event=>toggleProjectMenu(event,p.jobId??'')}><MoreHorizontal size={18}/></button>{projectMenuId===p.jobId && projectMenuPosition && createPortal(<div className="project-actions-menu" style={{ position: "fixed", top: projectMenuPosition.top, left: projectMenuPosition.left, right: "auto", zIndex: 2000 }}>{deleteConfirmId===p.jobId ? <><p>Delete this project and its stored files?</p><button type="button" className="project-delete-confirm" disabled={deletingProjectId===p.jobId} onClick={()=>void deleteProject(p)}>{deletingProjectId===p.jobId?'Deleting...':'Confirm delete'}</button><button type="button" onClick={()=>{setDeleteConfirmId(null);setProjectMenuId(null)}}>Cancel</button></> : <><button type="button" className="project-view-option" onClick={()=>{setProjectMenuId(null);setReport(null);setDetails(p);setReportDeleteConfirmOpen(false);setReportPage(true)}}><FileText size={14}/>View report</button><label className="project-folder-select"><Folder size={14}/><select aria-label={`Move ${p.title} to folder`} title="Move to folder" value="" disabled={movingProjectId===p.jobId} onChange={event=>void moveProjectToFolder(p,event.target.value==="__all_videos__"?"":event.target.value)}><option value="" disabled>{movingProjectId===p.jobId?"Moving?":"Move to folder"}</option>{folders.map(folder=><option key={folder.id} value={folder.id}>{folder.name}</option>)}{p.folderId&&<option value="__all_videos__">All videos</option>}</select></label><button type="button" className="project-delete-option" onClick={()=>setDeleteConfirmId(p.jobId??null)}><Trash2 size={14}/>Delete project</button></>}</div>,document.body)}</div>}</td></tr>) : <tr><td colSpan={6}><div className="empty-state"><Search size={19}/><b>{activeFolderId ? "No videos in this folder yet" : "No matching projects"}</b><span>{activeFolderId ? "Move a project here or start a new dub in this folder." : "Try another search."}</span></div></td></tr>}</tbody></table></div><button className="list-footer" onClick={()=>setNotice('You’re viewing the latest projects in this workspace.')}>Showing {visibleProjects.length} of {folderProjects.length} projects <ArrowDown size={13}/></button></div>
 

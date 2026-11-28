@@ -1,4 +1,6 @@
 .incoming-video-requests { margin-bottom: 18px; }
+.workflow-overview-grid .incoming-video-requests { min-height: 0; margin-bottom: 0; }
+.workflow-overview-grid .incoming-video-requests-heading { min-height: 62px; padding: 13px 16px; }
 .incoming-video-requests-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 17px 13px; border-bottom: 1px solid #f0eef3; }
 .incoming-video-requests-heading h2 { margin: 5px 0 0; color: #393a35; font: 700 14px "Matter"; letter-spacing: -.25px; }
 .incoming-video-count { margin-left: 4px; padding: 3px 6px; border-radius: 6px; background: #f0f2ed; color: #777d70; font: 600 9px "Matter"; vertical-align: 2px; }
@@ -11,7 +13,7 @@
 .incoming-video-empty>div { display: grid; gap: 4px; }
 .incoming-video-empty b { color: #686c63; font: 600 10px "Matter"; }
 .incoming-video-empty small { color: #9a9e95; font: 8px "Matter"; }
-.incoming-video-list { display: grid; }
+.incoming-video-list { display: grid; max-height: 246px; overflow: auto; scrollbar-width: thin; }
 .incoming-video-card { display: flex; min-height: 82px; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid #f1f0f3; }
 .incoming-video-card:last-child { border-bottom: 0; }
 .incoming-video-format { display: grid; width: 37px; height: 40px; flex: none; place-items: center; align-content: center; gap: 3px; border-radius: 9px; background: #f0eef5; color: #765f88; }

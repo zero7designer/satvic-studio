@@ -381,9 +381,9 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .workflow-format-selection>header h2{margin:5px 0 4px;color:var(--studio-accent-deep,#355442);font:500 19px/1.25 "Matter";letter-spacing:-.02em}
 .workflow-format-selection>header p{margin:0;color:#777f75;font:400 11px/1.5 "Matter"}
 .workflow-format-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.workflow-format-card{display:flex;min-width:0;min-height:108px;align-items:center;gap:13px;padding:16px;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:#fff;color:var(--studio-accent,#42634e);text-align:left;cursor:pointer;transition:transform .16s,border-color .16s,background .16s,box-shadow .16s}
+.workflow-format-card{display:flex;min-width:0;min-height:108px;align-items:flex-start;gap:13px;padding:16px;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:#fff;color:var(--studio-accent,#42634e);text-align:left;cursor:pointer;transition:transform .16s,border-color .16s,background .16s,box-shadow .16s}
 .workflow-format-card:hover{transform:translateY(-2px);border-color:var(--studio-accent,#42634e);background:var(--studio-soft,#edf4ef);box-shadow:0 7px 20px var(--studio-shadow,#42634e20)}
-.workflow-format-card-icon{display:grid;width:44px;height:44px;flex:none;place-items:center;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
+.workflow-format-card-icon{display:grid;width:44px;height:44px;flex:none;place-items:center;margin-top:3px;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
 .workflow-format-card.short .workflow-format-card-icon .video-platform-pair svg:first-child{color:#c13584}
 .workflow-format-card.short .workflow-format-card-icon .video-platform-pair svg:last-child{color:#f03}
 .workflow-format-card.long .workflow-format-card-icon{background:#f8eeee;color:#f03}
@@ -391,7 +391,20 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .workflow-format-card-copy>small{color:var(--studio-accent,#42634e);font:600 8px/1.2 "Matter";letter-spacing:.1em}
 .workflow-format-card-copy>b{overflow:hidden;color:#343d34;font:500 13px/1.3 "Matter";text-overflow:ellipsis}
 .workflow-format-card-copy>span{color:#828a80;font:400 10px/1.4 "Matter"}
-.workflow-format-card>svg:last-child{flex:none;color:var(--studio-accent,#42634e);transition:transform .16s}
+.workflow-format-card-copy>.workflow-format-recent{display:grid;gap:6px;width:100%;margin-top:7px;padding-top:8px;border-top:1px solid var(--studio-line,#e1ebe3);color:var(--studio-muted,#778376)}
+.workflow-format-recent>small{color:var(--studio-accent,#42634e);font:600 8px/1.2 "Matter";letter-spacing:.08em}
+.workflow-format-recent-item{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:9px}
+.workflow-format-recent-item>span:first-child{display:grid;min-width:0;gap:2px}
+.workflow-format-recent-item>span:first-child>b{overflow:hidden;color:var(--studio-text,#343d34);font:500 10px/1.3 "Matter";text-overflow:ellipsis;white-space:nowrap}
+.workflow-format-recent-item>span:first-child>small{color:var(--studio-muted,#828a80);font:400 9px/1.2 "Matter"}
+.workflow-format-recent-status{display:inline-flex;flex:none;align-items:center;gap:4px;padding:4px 6px;border-radius:999px;background:#f1f3f0;color:#60685e;font:500 8px/1 "Matter";white-space:nowrap}
+.workflow-format-recent-status>i{width:5px;height:5px;border-radius:50%;background:currentColor}
+.workflow-format-recent-status.ready{background:#edf5ef;color:#558363}
+.workflow-format-recent-status.needs-review{background:#faf3e6;color:#a37c48}
+.workflow-format-recent-status.in-progress{background:#edf2f8;color:#6b83a2}
+.workflow-format-recent-status.failed{background:#f8efed;color:#b45450}
+.workflow-format-recent-empty,.workflow-format-recent-more{color:var(--studio-muted,#828a80);font:400 9px/1.35 "Matter"}
+.workflow-format-card>svg:last-child{align-self:center;flex:none;color:var(--studio-accent,#42634e);transition:transform .16s}
 .workflow-format-card:hover>svg:last-child{transform:translateX(3px)}
 .app-shell .work-grid { align-items: stretch; }
 .app-shell .insight-column { grid-template-columns: 1fr; grid-template-rows: 1fr; align-self: stretch; }
@@ -1199,7 +1212,7 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .feedback-calendar-toolbar{display:flex;align-items:center;justify-content:space-between;margin:20px 0 9px;padding:0 3px}
 .app-shell .feedback-calendar-toolbar>b{color:#393d37;font:500 12px "Matter"}
 .app-shell .feedback-calendar-toolbar>button,.app-shell .feedback-back-button{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border:1px solid #e8eae6;border-radius:8px;background:#fff;color:#72786f;cursor:pointer}
-.app-shell .feedback-calendar-toolbar>button:hover,.app-shell .feedback-back-button:hover{border-color:var(--feedback-accent);background:var(--feedback-soft);color:var(--feedback-deep)}
+.app-shell .feedback-calendar-toolbar>button:hover,.app-shell .feedback-back-button:hover{border-color:var(--feedback-accent);background:var(--feedback-soft);color:var(--feedback-accent-deep)}
 .app-shell .feedback-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;align-content:start}
 .app-shell .feedback-weekday{display:grid;height:22px;place-items:center;color:#a0a39c;font:500 8px "Matter"}
 .app-shell .feedback-day-spacer{min-height:34px}
@@ -1208,7 +1221,7 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .feedback-day.today{border-color:#d9dcd6;color:#30342f;font-weight:600}
 .app-shell .feedback-day.has-feedback{border-color:var(--feedback-accent);background:var(--feedback-accent);color:#fff;font-weight:600;box-shadow:0 3px 8px var(--studio-shadow,#705c9920)}
 .app-shell .feedback-day.has-feedback:hover{background:var(--feedback-accent-deep)}
-.app-shell .feedback-day>i{position:absolute;top:2px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:7px;background:#fff;color:var(--feedback-deep);font:600 7px/11px "Matter";font-style:normal;text-align:center}
+.app-shell .feedback-day>i{position:absolute;top:2px;right:3px;min-width:11px;height:11px;padding:0 2px;border-radius:7px;background:#fff;color:var(--feedback-accent-deep);font:600 7px/11px "Matter";font-style:normal;text-align:center}
 .app-shell .feedback-calendar-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:12px;color:#898e85}
 .app-shell .feedback-calendar-footer>span{display:flex;align-items:center;gap:6px;font:400 9px "Matter";white-space:nowrap}
 .app-shell .feedback-calendar-footer>span>i{width:8px;height:8px;border-radius:3px;background:var(--feedback-accent)}
@@ -1218,7 +1231,7 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .feedback-sheet-help{color:#8f958b;font:400 8px/1.45 "Matter"}
 .app-shell .feedback-load-error{align-items:flex-start;color:#a8564f;line-height:1.4}
 .app-shell .feedback-load-error svg{margin-top:1px;color:#a8564f}
-.app-shell .feedback-load-error button{margin-left:auto;border:0;background:transparent;color:var(--feedback-deep);font:500 8px "Matter";cursor:pointer}
+.app-shell .feedback-load-error button{margin-left:auto;border:0;background:transparent;color:var(--feedback-accent-deep);font:500 8px "Matter";cursor:pointer}
 .app-shell .feedback-spin{animation:feedback-spin .9s linear infinite}
 @keyframes feedback-spin{to{transform:rotate(360deg)}}
 .app-shell .feedback-back-button{width:auto;gap:5px;padding:0 8px;font:500 9px "Matter"}
@@ -1812,6 +1825,8 @@ body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d11
 .video-manager-requests .panel-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid var(--studio-line,#e1ebe3)}
 .video-manager-requests .panel-heading h2{margin:5px 0 0;color:#303b31;font:500 16px "Matter"}
 .video-manager-requests .section-kicker{color:var(--studio-accent,#42634e)}
+.video-manager-request-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.video-manager-request-search{width:128px;min-width:128px;flex:none;border-radius:7px}
 .video-manager-request-filters{display:flex;flex-wrap:wrap;gap:5px}
 .video-manager-request-filters button{display:inline-flex;min-height:29px;align-items:center;gap:6px;padding:0 8px;border:1px solid transparent;border-radius:7px;background:transparent;color:#737b71;font:400 9px "Matter";cursor:pointer}
 .video-manager-request-filters button:hover{background:#f5f7f3}
@@ -1876,6 +1891,21 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.pending{background:#3a2f1e;color:#e3b341}
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.in_progress{background:#302444;color:#d2a8ff}
 .app-shell.product-video-manager[data-mode=dark] .video-manager-request-status.completed{background:#173624;color:#7ee787}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-search{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-bg)!important;color:var(--studio-dark-muted)!important}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-request-search>span{color:var(--studio-dark-muted)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-input-row{border-color:var(--studio-dark-border);color:var(--studio-dark-muted)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-escape,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-footer kbd{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-muted)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-result:hover,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-result:focus-visible{background:var(--studio-dark-raised)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-result-copy>b,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-empty>b{color:var(--studio-dark-text)}
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-section-label,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-result-copy>small,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-result-arrow,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-empty,
+.app-shell.product-video-manager[data-mode=dark] .video-manager-search-dock .spotlight-footer{color:var(--studio-dark-muted)}
 .app-shell.product-video-manager[data-mode=dark] .primary-btn{border-color:var(--studio-accent)!important;background:var(--studio-accent)!important;color:#fff!important}
 
 @media(max-width:760px){
@@ -1885,6 +1915,7 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
   .video-manager-status-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
   .video-manager-status-metrics .metric-card{min-height:95px}
   .video-manager-requests .panel-heading{align-items:flex-start;flex-direction:column}
+  .video-manager-request-tools{width:100%;justify-content:flex-start}
 }
 @media(max-width:520px){
   .video-manager-format-options{grid-template-columns:1fr}
@@ -1979,6 +2010,22 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-copy>b{color:var(--studio-dark-text)}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-copy>span{color:var(--studio-dark-muted)}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-icon{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-copy>.workflow-format-recent{border-color:var(--studio-dark-border);color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-item>span:first-child>b{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-item>span:first-child>small,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-empty,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-more{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-status{background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-status.ready{background:#173624;color:#7ee787}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-status.needs-review{background:#3a2f1e;color:#e3b341}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-status.in-progress{background:#302444;color:#d2a8ff}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-recent-status.failed{background:#3d2326;color:#ff7b72}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-requests-heading,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-card{border-color:var(--studio-dark-border)}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-refresh,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-status-action{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-format,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-empty>span{background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-main>p,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-date,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-empty small,.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-languages b{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-languages span{background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-status.pending{background:#3a2f1e;color:#e3b341}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-status.in_progress{background:#302444;color:#d2a8ff}
+.app-shell.product-satvic-fluid[data-mode=dark] .incoming-video-requests .incoming-video-empty b{color:var(--studio-dark-text)}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding-title p{color:var(--studio-dark-muted)}
 .app-shell.product-satvic-fluid .workflow-onboarding.qa-flow{border-color:var(--studio-line);background:linear-gradient(125deg,#ffffffed,var(--studio-canvas))}
 .app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-heading h2{color:var(--studio-accent-deep)}
@@ -2062,3 +2109,33 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal>p,.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal label{color:var(--studio-dark-muted)}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal input{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
 .app-shell.product-satvic-fluid[data-mode=dark] .account-delete-actions .account-delete-cancel{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-panel{border-color:var(--studio-line);background:var(--studio-canvas)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-header,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-footer{border-color:var(--studio-line)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-header .section-kicker,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-rate-details summary,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-source-links a,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-total-costing span{color:var(--studio-accent)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-header .section-kicker:before{background:var(--studio-accent)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-header h2,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-dashboard-page .welcome-row h1,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-steps-panel h2,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-projects-panel h2,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-spend-panel h2{color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-summary article,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-table-wrap,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-project-table-wrap,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-rate-details{border-color:var(--studio-line)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-summary article,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-project-detail .cost-estimate-summary article{background:var(--studio-soft)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-summary article>b,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-project-table td:nth-child(4) b,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-spend-total b,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-total-costing b,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-folder-detail>.cost-estimate-summary .cost-total-card>b{color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-table th,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-project-table th{border-color:var(--studio-line);background:var(--studio-canvas)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-steps-list li,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-spend-total,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-spend-meta,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-total-costing{border-color:var(--studio-line)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-project-table tbody tr:hover,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-project-table tbody tr:focus-visible{background:var(--studio-soft)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-steps-panel,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-projects-panel,.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-spend-panel{border-color:var(--studio-line);box-shadow:0 5px 22px var(--studio-shadow)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-folder-detail>.cost-estimate-summary .cost-total-card{border-color:var(--studio-line);background:var(--studio-soft)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-refresh-button{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-refresh-button:hover:not(:disabled){background:var(--studio-line)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-header .icon-btn{border-color:var(--studio-line);color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-footer button{border-color:var(--studio-accent);background:var(--studio-accent)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .cost-estimate-footer button:hover{background:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .folder-cost-estimate-trigger{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) .folder-cost-estimate-trigger:hover,.app-shell.product-satvic-fluid:not([data-mode=dark]) .folder-cost-estimate-trigger[aria-expanded=true]{border-color:var(--studio-accent);background:var(--studio-soft)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) :is(.cost-estimate-table td select,.cost-duration-field,.cost-rate-grid input,.cost-detail-field select){border-color:var(--studio-line)}
+.app-shell.product-satvic-fluid:not([data-mode=dark]) :is(.cost-estimate-table td select:focus-visible,.cost-duration-field:focus-within,.cost-rate-grid input:focus-visible,.cost-detail-field select:focus-visible){border-color:var(--studio-accent);outline:2px solid var(--studio-soft);outline-offset:1px}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.cost-estimate-header .section-kicker,.cost-estimate-header .section-kicker:before,.cost-estimate-summary article>b,.cost-project-table td:nth-child(4) b,.cost-spend-total b,.cost-total-costing span,.cost-total-costing b){color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-header .section-kicker:before{background:var(--studio-accent)}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-refresh-button{border-color:var(--studio-accent)!important;color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-footer button{border-color:var(--studio-accent)!important;background:var(--studio-accent)!important;color:#fff!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .cost-estimate-footer button:hover{border-color:var(--studio-accent-deep)!important;background:var(--studio-accent-deep)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .folder-cost-estimate-trigger{border-color:var(--studio-accent)!important;color:var(--studio-accent)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .folder-cost-estimate-trigger:hover,.app-shell.product-satvic-fluid[data-mode=dark] .folder-cost-estimate-trigger[aria-expanded=true]{border-color:var(--studio-accent)!important;background:var(--studio-dark-hover)!important;color:var(--studio-accent)!important}

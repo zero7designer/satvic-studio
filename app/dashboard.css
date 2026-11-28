@@ -1277,7 +1277,7 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .folder-library .project-tools{position:static;width:auto;display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0}
 .app-shell .folder-library .search-box{width:150px;min-width:150px;flex:none}
 .app-shell .folder-library-grid{display:grid;flex:1;grid-template-columns:minmax(0,1fr);gap:14px;padding:4px 20px 20px}
-.app-shell .folder-type-column{display:flex;min-width:0;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--studio-line,#e8ece6);border-radius:12px;background:var(--studio-canvas,#fbfcfa)}
+.app-shell .folder-type-column{display:flex;min-width:0;flex-direction:column;gap:9px;padding:14px;border:1px solid var(--studio-line,#e8ece6);border-radius:12px;background:#fbfcfa}
 .app-shell .folder-type-column>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px 8px;border-bottom:1px solid var(--studio-line,#e9ece7)}
 .app-shell .folder-type-column>header>div{display:grid;gap:3px}
 .app-shell .folder-type-column>header b{color:#343b33;font:500 13px "Matter"}

@@ -9,9 +9,10 @@ export default async function ProductDashboardPage({ params }: { params: Promise
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
-  const { data: profile, error } = await supabase.from('profiles').select('user_id').eq('user_id', user.id).maybeSingle();
+  const { data: profile, error } = await supabase.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
   if (error) redirect('/login?setup=profile-table');
   if (!profile) redirect('/onboarding');
+  if (profile.role === 'Video Manager') redirect('/video-manager');
 
   const { productId } = await params;
   const product = getProduct(productId);

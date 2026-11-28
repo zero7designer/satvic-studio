@@ -10,6 +10,8 @@ export async function middleware(request: NextRequest) {
   const isPublicPage = pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isAuthCallback = request.nextUrl.pathname === '/auth/callback';
+  const isDubbingManagerApi = ['/api/analyze', '/api/blob', '/api/folders', '/api/jobs', '/api/notifications']
+    .some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const internalToken = process.env.WORKFLOW_INTERNAL_TOKEN;
   if (pathname === '/api/analyze' && internalToken && request.headers.get('x-workflow-internal') === internalToken) return NextResponse.next();
   if (!url || !key) {
@@ -30,7 +32,13 @@ export async function middleware(request: NextRequest) {
   });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user && !isPublicPage && !isAuthCallback) return NextResponse.redirect(new URL('/login', request.url));
-  if (user && isAuthPage) return NextResponse.redirect(new URL('/dashboard/satvic-fluid', request.url));
+  if (user && isDubbingManagerApi) {
+    const { data: profile, error } = await supabase.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+    if (error || profile?.role !== 'Video Dubbing Manager') {
+      return NextResponse.json({ error: 'This action is available to Video Dubbing Managers only.' }, { status: 403 });
+    }
+  }
+  if (user && isAuthPage) return NextResponse.redirect(new URL('/dashboard', request.url));
   return response;
 }
 

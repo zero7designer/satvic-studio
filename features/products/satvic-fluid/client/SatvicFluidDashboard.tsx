@@ -1618,30 +1618,31 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
               const progress = folderProgress.get(folder.id) || emptyFolderProgress;
               const progressAvailable = jobHistoryState === 'ready';
               const qaPercent = progressAvailable && progress.total ? Math.round(progress.qaReports / progress.total * 100) : 0;
-              const statusDetails = [
-                progress.inProgress && `${progress.inProgress} in progress`,
-                progress.needsReview && `${progress.needsReview} need review`,
-                progress.failed && `${progress.failed} failed`,
-              ].filter(Boolean).join(' · ');
+              const statusItems: { kind: 'in-progress' | 'needs-review' | 'failed'; count: number; label: string }[] = [];
+              if (progressAvailable && progress.inProgress) statusItems.push({ kind: 'in-progress', count: progress.inProgress, label: 'in progress' });
+              if (progressAvailable && progress.needsReview) statusItems.push({ kind: 'needs-review', count: progress.needsReview, label: 'need review' });
+              if (progressAvailable && progress.failed) statusItems.push({ kind: 'failed', count: progress.failed, label: 'failed' });
               const progressLabel = !progressAvailable
                 ? jobHistoryState === 'loading' ? 'Loading video progress…' : 'Progress unavailable'
-                : progress.total === 0 ? 'No videos sent yet' : statusDetails || 'QA reports available for all videos';
+                : progress.total === 0 ? 'No videos sent yet' : progress.qaReports === progress.total ? 'All reviewed' : 'QA pending';
+              const statusSummary = statusItems.map(item => `${item.count} ${item.label}`).join(', ') || progressLabel;
               return <button
                 type="button"
                 className="folder-library-card"
                 key={folder.id}
                 onClick={() => { setSelectedVideoType(folder.video_type || 'short'); setSelectedTaskDate(null); setWorkflowDashboardOpen(true); setActiveFolderId(folder.id); setActiveTab('All projects'); }}
-                aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports` : progressLabel}. Open folder.`}
+                aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports, ${statusSummary}` : progressLabel}. Open folder.`}
               >
                 <Folder size={19}/>
                 <span>
                   <b>{folder.name}</b>
                   <span className="folder-library-metrics">
-                    <span><b>{progressAvailable ? `${progress.dubbed}/${progress.total}` : '—'}</b><small>dubbed</small></span>
-                    <span><b>{progressAvailable ? `${progress.qaReports}/${progress.total}` : '—'}</b><small>QA reports</small></span>
+                    <span className="folder-library-metric"><b>{progressAvailable ? `${progress.dubbed}/${progress.total}` : '—'}</b><small>Dubbed</small></span>
+                    <span className="folder-library-metric"><b>{progressAvailable ? `${progress.qaReports}/${progress.total}` : '—'}</b><small>QA reports</small></span>
+                    {statusItems.map(item => <span className={`folder-library-status ${item.kind}`} key={item.kind}><b>{item.count}</b><small>{item.label}</small></span>)}
+                    {!statusItems.length && <span className={`folder-library-status ${progressAvailable && progress.total > 0 && progress.qaReports === progress.total ? 'ready' : 'neutral'}`}><small>{progressLabel}</small></span>}
                   </span>
-                  {progressAvailable && <span className="folder-library-meter" aria-hidden="true"><span style={{ width: `${qaPercent}%` }}/></span>}
-                  <small className="folder-library-status">{progressLabel}</small>
+                  {progressAvailable && progress.total > 0 && <span className="folder-library-meter" aria-hidden="true"><span style={{ width: `${qaPercent}%` }}/></span>}
                 </span>
                 <ArrowRight size={16}/>
               </button>;

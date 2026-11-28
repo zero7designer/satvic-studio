@@ -204,7 +204,7 @@ export default function VideoManagerDashboard({
       initialFeatureId="create-job"
       onFeatureSelect={setActiveView}
     >
-      <div className="video-manager-dashboard">
+      <div className={`video-manager-dashboard${activeView === 'request-status' ? ' video-manager-dashboard-status' : ''}`}>
         {activeView === 'create-job' ? <>
           <section className="video-manager-create-card panel" aria-labelledby="video-manager-new-request-title">
             <header className="video-manager-create-heading">
@@ -269,7 +269,7 @@ export default function VideoManagerDashboard({
           <header className="welcome-row video-manager-status-header">
             <div>
               <h1>Request status</h1>
-              <p className="welcome-subtitle">Follow your videos from submission through the dubbing queue.</p>
+              <p className="welcome-subtitle">See where each video is in the dubbing workflow.</p>
             </div>
             <button type="button" className="video-manager-refresh" onClick={() => void loadRequests(true)} disabled={requestsRefreshing}>
               {requestsRefreshing ? <LoaderCircle size={15} className="spin"/> : <RefreshCw size={15}/>} Refresh

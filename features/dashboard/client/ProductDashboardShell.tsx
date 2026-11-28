@@ -29,6 +29,7 @@ type ProductDashboardShellProps = {
   accountAvatar?: string;
   onFeatureSelect?: (featureId: string) => void;
   onVideoTypeSelect?: (videoType: 'short' | 'long') => void;
+  selectedVideoType?: 'short' | 'long' | null;
   initialFeatureId?: string;
   hideFeatureNavigation?: boolean;
   children: ReactNode;
@@ -49,6 +50,7 @@ export default function ProductDashboardShell({
   accountAvatar = 'sage',
   onFeatureSelect,
   onVideoTypeSelect,
+  selectedVideoType,
   initialFeatureId,
   hideFeatureNavigation = false,
   children,
@@ -78,7 +80,11 @@ export default function ProductDashboardShell({
   const [followingNotificationId, setFollowingNotificationId] = useState<string | null>(null);
   const [activeFeatureId, setActiveFeatureId] = useState(initialFeatureId ?? product.groups[0].features[1]?.id ?? product.groups[0].features[0].id);
   const [expandedFeatureId, setExpandedFeatureId] = useState<string | null>(initialFeatureId ?? null);
-  const [activeVideoType, setActiveVideoType] = useState<'short' | 'long'>('short');
+  const [activeVideoType, setActiveVideoType] = useState<'short' | 'long' | null>(null);
+
+  useEffect(() => {
+    if (selectedVideoType !== undefined) setActiveVideoType(selectedVideoType);
+  }, [selectedVideoType]);
 
   useEffect(() => {
     const savedTheme = dashboardThemes.find(option => option.id === window.localStorage.getItem('satvic-studio-dashboard-theme'));

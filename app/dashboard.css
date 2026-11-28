@@ -364,6 +364,35 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .app-shell .qa-flow-steps p { margin: 0; color: #777a74; font: 400 11px/1.5 "Matter"; }
 .app-shell .qa-flow-action { display: inline-flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid #e3e4e0; border-radius: 999px; background: #f7f8f6; color: #31332e; font: 500 11px/1 "Matter"; cursor: pointer; }
 .app-shell .qa-flow-action:hover { background: #eeefec; }
+.workflow-dashboard-home{display:grid;max-width:1120px;gap:16px;margin:0 auto}
+.app-shell.product-satvic-fluid .workflow-onboarding.qa-flow{margin:0;border-color:var(--studio-line);background:linear-gradient(125deg,#ffffffed,var(--studio-canvas))}
+.workflow-onboarding .qa-flow-heading{align-items:center}
+.workflow-onboarding-title{display:flex;min-width:0;align-items:center;gap:13px}
+.workflow-onboarding-title>div{min-width:0}
+.workflow-onboarding-title .section-kicker{color:var(--studio-accent,#42634e)}
+.workflow-onboarding .qa-flow-heading h2{color:var(--studio-accent-deep,#355442)}
+.workflow-onboarding-title p{margin:5px 0 0;color:#777a74;font:400 11px/1.5 "Matter"}
+.workflow-onboarding .qa-flow-time,.workflow-onboarding .qa-flow-time svg{color:var(--studio-accent,#42634e)}
+.workflow-onboarding .qa-flow-brand{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent)}
+.workflow-onboarding .qa-step-number{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent-deep)}
+.workflow-onboarding .qa-flow-steps li{border-color:var(--studio-line)}
+.workflow-format-selection{padding:21px 23px;border:1px solid var(--studio-line,#e1ebe3);border-radius:16px;background:#ffffffd9;box-shadow:0 8px 26px #506b5810}
+.workflow-format-selection>header{margin-bottom:16px}
+.workflow-format-selection>header h2{margin:5px 0 4px;color:var(--studio-accent-deep,#355442);font:500 19px/1.25 "Matter";letter-spacing:-.02em}
+.workflow-format-selection>header p{margin:0;color:#777f75;font:400 11px/1.5 "Matter"}
+.workflow-format-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.workflow-format-card{display:flex;min-width:0;min-height:108px;align-items:center;gap:13px;padding:16px;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:#fff;color:var(--studio-accent,#42634e);text-align:left;cursor:pointer;transition:transform .16s,border-color .16s,background .16s,box-shadow .16s}
+.workflow-format-card:hover{transform:translateY(-2px);border-color:var(--studio-accent,#42634e);background:var(--studio-soft,#edf4ef);box-shadow:0 7px 20px var(--studio-shadow,#42634e20)}
+.workflow-format-card-icon{display:grid;width:44px;height:44px;flex:none;place-items:center;border:1px solid var(--studio-line,#e1ebe3);border-radius:12px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
+.workflow-format-card.short .workflow-format-card-icon .video-platform-pair svg:first-child{color:#c13584}
+.workflow-format-card.short .workflow-format-card-icon .video-platform-pair svg:last-child{color:#f03}
+.workflow-format-card.long .workflow-format-card-icon{background:#f8eeee;color:#f03}
+.workflow-format-card-copy{display:grid;min-width:0;flex:1;gap:4px}
+.workflow-format-card-copy>small{color:var(--studio-accent,#42634e);font:600 8px/1.2 "Matter";letter-spacing:.1em}
+.workflow-format-card-copy>b{overflow:hidden;color:#343d34;font:500 13px/1.3 "Matter";text-overflow:ellipsis}
+.workflow-format-card-copy>span{color:#828a80;font:400 10px/1.4 "Matter"}
+.workflow-format-card>svg:last-child{flex:none;color:var(--studio-accent,#42634e);transition:transform .16s}
+.workflow-format-card:hover>svg:last-child{transform:translateX(3px)}
 .app-shell .work-grid { align-items: stretch; }
 .app-shell .insight-column { grid-template-columns: 1fr; grid-template-rows: 1fr; align-self: stretch; }
 .app-shell .review-panel { display: flex; height: 100%; flex-direction: column; padding: 20px; }
@@ -1944,7 +1973,26 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day.today,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day[aria-pressed=true]{border-color:var(--studio-accent);background:var(--studio-dark-raised)}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-folder-drop-target{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-folder-drop-target.drag-over{border-color:var(--studio-accent);background:var(--studio-dark-raised)}
-@media(max-width:760px){.workflow-overview-grid{grid-template-columns:1fr}.folder-library-grid{grid-template-columns:1fr}.workflow-folder-drop-target{min-height:82px}}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-selection{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card:hover{border-color:var(--studio-accent);background:var(--studio-dark-hover)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-copy>b{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-copy>span{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-card-icon{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding-title p{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid .workflow-onboarding.qa-flow{border-color:var(--studio-line);background:linear-gradient(125deg,#ffffffed,var(--studio-canvas))}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-heading h2{color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-heading p,.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-steps li{color:var(--studio-muted)}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-time,.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-time svg,.app-shell.product-satvic-fluid .workflow-onboarding-title .section-kicker{color:var(--studio-accent)}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-step-number{border-color:var(--studio-line);background:var(--studio-soft);color:var(--studio-accent-deep)}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-steps b{color:var(--studio-text)}
+.app-shell.product-satvic-fluid .workflow-onboarding .qa-flow-steps p,.app-shell.product-satvic-fluid .workflow-onboarding-title p{color:var(--studio-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding.qa-flow{border-color:var(--studio-dark-border);background:linear-gradient(125deg,var(--studio-dark-surface),var(--studio-dark-raised))}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-heading h2,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-steps b{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-heading p,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-steps li,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-steps p,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding-title p{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-time,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-flow-time svg,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding-title .section-kicker{color:var(--studio-dark-accent)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-onboarding .qa-step-number{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+@media(max-width:760px){.workflow-overview-grid{grid-template-columns:1fr}.folder-library-grid{grid-template-columns:1fr}.workflow-folder-drop-target{min-height:82px}.workflow-format-cards{grid-template-columns:1fr}}
 @media(max-width:520px){.workflow-overview-heading{padding-right:11px;padding-left:11px}.workflow-calendar-grid{gap:2px;padding-right:10px;padding-left:10px}.workflow-calendar-footer{padding-right:11px;padding-left:11px}}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-back{color:var(--studio-dark-muted)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .folder-video-type-option{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-text)!important}

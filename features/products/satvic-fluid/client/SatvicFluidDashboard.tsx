@@ -1,6 +1,6 @@
 'use client';
 
-import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { uploadPresigned } from '@vercel/blob/client';
@@ -171,9 +171,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
   const [folderSaving, setFolderSaving] = useState(false);
   const [folderTypeAssignmentId, setFolderTypeAssignmentId] = useState<string | null>(null);
   const [folderTypeAssignmentSaving, setFolderTypeAssignmentSaving] = useState(false);
-  const [movingFolderId, setMovingFolderId] = useState<string | null>(null);
-  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
-  const [dragOverVideoType, setDragOverVideoType] = useState<VideoFormType | null>(null);
   const [folderError, setFolderError] = useState('');
   const [folderDeleteConfirmOpen, setFolderDeleteConfirmOpen] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null);
@@ -1210,48 +1207,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     }
   }
 
-  async function moveFolderToVideoType(folderId: string, videoType: VideoFormType) {
-    const folder = folders.find(item => item.id === folderId);
-    if (!folder || folder.video_type === videoType || movingFolderId) return;
-    setMovingFolderId(folderId);
-    try {
-      const response = await fetch('/api/folders', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ folderId, videoType }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || 'Could not move this folder.');
-      const updated = body.folder as ProjectFolder;
-      setFolders(current => current.map(item => item.id === updated.id ? updated : item));
-      setNotice(`${updated.name} moved to ${videoType === 'short' ? 'Short-form (Shorts)' : 'Long-form'}.`);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Could not move this folder.');
-    } finally {
-      setMovingFolderId(null);
-    }
-  }
-
-  function startFolderDrag(event: DragEvent<HTMLButtonElement>, folderId: string) {
-    event.dataTransfer.setData('text/plain', folderId);
-    event.dataTransfer.effectAllowed = 'move';
-    setDraggedFolderId(folderId);
-  }
-
-  function allowFolderDrop(event: DragEvent<HTMLElement>, videoType: VideoFormType) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDragOverVideoType(videoType);
-  }
-
-  function dropFolder(event: DragEvent<HTMLElement>, videoType: VideoFormType) {
-    event.preventDefault();
-    const folderId = event.dataTransfer.getData('text/plain') || draggedFolderId;
-    setDraggedFolderId(null);
-    setDragOverVideoType(null);
-    if (folderId) void moveFolderToVideoType(folderId, videoType);
-  }
-
   async function renameActiveFolder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const folderId = activeFolderId;
@@ -1657,12 +1612,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
         <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></h3></div><div className="project-tools">
           <button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(selectedVideoType);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
         {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className="folder-library-grid">
-          <section
-            className={cx('folder-type-column', dragOverVideoType === selectedVideoType && 'drag-over', Boolean(draggedFolderId) && 'folder-drop-active')}
-            onDragOver={event => allowFolderDrop(event, selectedVideoType)}
-            onDragLeave={event => { if (event.currentTarget === event.target) setDragOverVideoType(null); }}
-            onDrop={event => dropFolder(event, selectedVideoType)}
-          >
+          <section className="folder-type-column">
             <header><div><b>{selectedVideoType === 'short' ? 'Short form' : 'Long form'}</b><FolderPlatformBadges videoType={selectedVideoType}/></div><span>{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></header>
             {folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).map(folder => {
               const progress = folderProgress.get(folder.id) || emptyFolderProgress;
@@ -1678,13 +1628,10 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                 : progress.total === 0 ? 'No videos sent yet' : statusDetails || 'QA reports available for all videos';
               return <button
                 type="button"
-                className={cx('folder-library-card', draggedFolderId === folder.id && 'dragging')}
+                className="folder-library-card"
                 key={folder.id}
-                draggable={folder.is_owner}
-                onDragStart={event => { if (folder.is_owner) startFolderDrag(event, folder.id); }}
-                onDragEnd={() => { setDraggedFolderId(null); setDragOverVideoType(null); }}
                 onClick={() => { setSelectedVideoType(folder.video_type || 'short'); setSelectedTaskDate(null); setWorkflowDashboardOpen(true); setActiveFolderId(folder.id); setActiveTab('All projects'); }}
-                aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports` : progressLabel}${folder.is_owner ? '. Drag to the other format to move this folder, or open it.' : '. Open folder.'}`}
+                aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports` : progressLabel}. Open folder.`}
               >
                 <Folder size={19}/>
                 <span>
@@ -1701,16 +1648,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             })}
             {!folders.some(folder => (folder.video_type || 'short') === selectedVideoType) && <div className="folder-type-empty">{selectedVideoType === 'short' ? 'Short-form project folders will appear here.' : 'Long-form project folders will appear here.'}</div>}
           </section>
-          <div
-            className={cx('workflow-folder-drop-target', dragOverVideoType === (selectedVideoType === 'short' ? 'long' : 'short') && 'drag-over', Boolean(draggedFolderId) && 'folder-drop-active')}
-            onDragOver={event => allowFolderDrop(event, selectedVideoType === 'short' ? 'long' : 'short')}
-            onDragLeave={event => { if (event.currentTarget === event.target) setDragOverVideoType(null); }}
-            onDrop={event => dropFolder(event, selectedVideoType === 'short' ? 'long' : 'short')}
-          >
-            <span>{selectedVideoType === 'short' ? <Youtube size={16}/> : <span className="video-platform-pair"><Instagram size={13}/><Youtube size={13}/></span>}</span>
-            <b>Move folders to {selectedVideoType === 'short' ? 'Long-form' : 'Short-form'}</b>
-            <small>Drag an owned folder here to change its format.</small>
-          </div>
         </div>}
       </section>}
 

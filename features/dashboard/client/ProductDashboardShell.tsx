@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, AudioLines, Bell, Calculator, Check, CheckCheck, ChevronDown,
-  LogOut, Menu, Moon, Palette, PanelLeftClose,
+  LoaderCircle, LogOut, Menu, Moon, Palette, PanelLeftClose,
   PanelLeftOpen, Plus, Sun, Trash2, X, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
@@ -56,6 +56,10 @@ export default function ProductDashboardShell({
   const [productMenuOpen, setProductMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [appThemeOpen, setAppThemeOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountConfirmation, setDeleteAccountConfirmation] = useState('');
+  const [deleteAccountError, setDeleteAccountError] = useState('');
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   const [dashboardTheme, setDashboardTheme] = useState<DashboardTheme>('sage');
   const [dashboardMode, setDashboardMode] = useState<'light' | 'dark'>('light');
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -157,6 +161,43 @@ export default function ProductDashboardShell({
   const workspaceName = accountName === 'Account' ? 'Satvic Studio Workspace' : `${accountName}'s Workspace`;
   const visibleProducts = products;
   const visibleNotifications = notifications;
+  const confirmationPrompt = accountEmail.trim() || 'DELETE';
+  const deleteAccountConfirmed = deleteAccountConfirmation.trim().toLowerCase() === confirmationPrompt.toLowerCase();
+
+  function openDeleteAccountDialog() {
+    setDeleteAccountConfirmation('');
+    setDeleteAccountError('');
+    setAccountMenuOpen(false);
+    setDeleteAccountOpen(true);
+  }
+
+  async function confirmAccountDeletion() {
+    setDeleteAccountBusy(true);
+    setDeleteAccountError('');
+    try {
+      const response = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: deleteAccountConfirmation }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not delete your account.');
+      try {
+        for (let index = window.localStorage.length - 1; index >= 0; index--) {
+          const key = window.localStorage.key(index);
+          if (key === 'satvic-studio-dashboard-theme' || key === 'satvic-studio-dashboard-mode' || key?.startsWith('satvic-cost-estimate:')) {
+            window.localStorage.removeItem(key);
+          }
+        }
+      } catch (error) {
+        console.error('Could not clear local Satvic Studio preferences after account deletion.', error);
+      }
+      window.location.replace('/login');
+    } catch (error) {
+      setDeleteAccountError(error instanceof Error ? error.message : 'Could not delete your account. Please try again.');
+      setDeleteAccountBusy(false);
+    }
+  }
 
   const loadNotifications = useCallback(async () => {
     setNotificationsLoading(true);
@@ -255,6 +296,42 @@ export default function ProductDashboardShell({
         {appThemeOpen && <div className="account-theme-options" id="account-app-theme-options" role="radiogroup" aria-label="Choose an app color theme">{dashboardThemes.map(option => <button type="button" role="radio" aria-checked={dashboardTheme === option.id} className="account-theme-option" key={option.id} onClick={() => setDashboardTheme(option.id)} aria-label={`${option.label} app theme`} title={option.label}><span className={`account-theme-swatch ${option.id}`}>{dashboardTheme === option.id && <Check size={11}/>}</span></button>)}</div>}
         <button type="button" role="switch" aria-checked={dashboardMode === 'dark'} className="account-menu-option account-mode-option" onClick={() => setDashboardMode(mode => mode === 'dark' ? 'light' : 'dark')}><span className="account-mode-icon">{dashboardMode === 'dark' ? <Moon size={16}/> : <Sun size={16}/>}</span><span>{dashboardMode === 'dark' ? 'Dark mode' : 'Light mode'}</span><span className={`account-mode-switch${dashboardMode === 'dark' ? ' active' : ''}`} aria-hidden="true"><i/></span></button>
         <form action={signOut}><PendingSubmitButton role="menuitem" className="account-logout" pendingText="Logging out…"><LogOut size={17} /><span>Log out</span></PendingSubmitButton></form>
+        <button type="button" role="menuitem" className="account-delete-trigger" aria-haspopup="dialog" onClick={openDeleteAccountDialog}><Trash2 size={17}/><span>Delete account</span></button>
+      </div>}
+
+      {deleteAccountOpen && <div className="account-delete-backdrop">
+        <section
+          className="account-delete-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="account-delete-title"
+          aria-describedby="account-delete-description"
+          onKeyDown={event => { if (event.key === 'Escape' && !deleteAccountBusy) setDeleteAccountOpen(false); }}
+        >
+          <span className="account-delete-icon"><Trash2 size={20}/></span>
+          <h2 id="account-delete-title">Delete your account?</h2>
+          <p id="account-delete-description">This permanently deletes your profile, folders, projects, QA reports, and stored video files from Satvic Studio, Vercel Blob, and Backblaze B2. Shared folders you own will also disappear for collaborators.</p>
+          <p className="account-delete-provider-note">Files already sent to external AI providers may remain under their own retention policies. Active dubbing or QA jobs must finish before deletion.</p>
+          <form onSubmit={event => { event.preventDefault(); void confirmAccountDeletion(); }}>
+            <label htmlFor="account-delete-confirmation">Type <strong>{confirmationPrompt}</strong> to confirm</label>
+            <input
+              id="account-delete-confirmation"
+              type="text"
+              autoComplete="off"
+              autoFocus
+              value={deleteAccountConfirmation}
+              onChange={event => setDeleteAccountConfirmation(event.target.value)}
+              disabled={deleteAccountBusy}
+            />
+            {deleteAccountError && <p className="account-delete-error" role="alert">{deleteAccountError}</p>}
+            <div className="account-delete-actions">
+              <button type="button" className="account-delete-cancel" onClick={() => setDeleteAccountOpen(false)} disabled={deleteAccountBusy}>Cancel</button>
+              <button type="submit" className="account-delete-confirm" disabled={!deleteAccountConfirmed || deleteAccountBusy}>
+                {deleteAccountBusy ? <><LoaderCircle size={15} className="spin"/> Deleting…</> : <><Trash2 size={15}/> Delete account and data</>}
+              </button>
+            </div>
+          </form>
+        </section>
       </div>}
 
       <section className="main-area">

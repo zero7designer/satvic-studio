@@ -1546,11 +1546,32 @@ body:has(.app-shell) { overflow: hidden; background: #f2f3f1; }
 .account-theme-swatch.ocean{background:#4f8294}
 .account-theme-swatch.terracotta{background:#a96e58}
 .account-menu .account-theme-option:focus-visible,.account-menu .account-menu-option:focus-visible{outline:2px solid var(--studio-accent,#42634e);outline-offset:2px}
+.account-menu .account-delete-trigger{margin-top:5px;padding-top:5px;border-top:1px solid #ededeb;color:#bd3935}
+.account-menu .account-delete-trigger svg{color:#bd3935}
+.account-menu .account-delete-trigger:hover{background:#fff2f1!important;color:#a52a27}
 .account-mode-icon{display:grid;width:18px;place-items:center}
 .account-mode-switch{display:flex;width:34px;height:20px;align-items:center;margin-left:auto;padding:2px;border-radius:20px;background:#dfe3dd;transition:background .16s ease}
 .account-mode-switch i{width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #20211f30;transition:transform .16s ease}
 .account-mode-switch.active{background:#617c68}
 .account-mode-switch.active i{transform:translateX(14px)}
+
+.account-delete-backdrop{position:fixed;z-index:3000;inset:0;display:grid;place-items:center;padding:20px;background:#141813a8;backdrop-filter:blur(4px)}
+.account-delete-modal{width:min(100%,500px);max-height:calc(100vh - 40px);overflow-y:auto;padding:26px;border:1px solid #e5e8e2;border-radius:18px;background:#fff;color:#2f342e;box-shadow:0 24px 80px #0004}
+.account-delete-icon{display:grid;width:42px;height:42px;place-items:center;margin-bottom:15px;border-radius:12px;background:#fff0ef;color:#b42318}
+.account-delete-modal h2{margin:0 0 9px;color:#292e28;font:600 20px/1.25 "Matter"}
+.account-delete-modal>p{margin:0;color:#626960;font:400 12px/1.6 "Matter"}
+.account-delete-modal .account-delete-provider-note{margin-top:9px;color:#858b82;font-size:10px}
+.account-delete-modal form{display:grid;gap:8px;margin-top:18px}
+.account-delete-modal label{color:#484f46;font:500 11px/1.4 "Matter"}
+.account-delete-modal label strong{color:#242b24;overflow-wrap:anywhere}
+.account-delete-modal input{width:100%;height:42px;padding:0 11px;border:1px solid #dfe4dc;border-radius:8px;outline-color:#aab8a7;background:#fff;color:#2d332c;font:400 13px "Matter"}
+.account-delete-modal input:disabled{opacity:.7}
+.account-delete-error{margin:0;color:#b42318;font:500 11px/1.45 "Matter"}
+.account-delete-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
+.account-delete-actions button{display:inline-flex;min-height:39px;align-items:center;justify-content:center;gap:7px;padding:0 12px;border:1px solid #dfe4dc;border-radius:8px;background:#fff;color:#4d554b;font:500 11px "Matter";cursor:pointer}
+.account-delete-actions .account-delete-confirm{border-color:#b42318;background:#b42318;color:#fff}
+.account-delete-actions .account-delete-confirm:hover:not(:disabled){border-color:#971b14;background:#971b14}
+.account-delete-actions button:disabled{opacity:.5;cursor:not-allowed}
 
 .app-shell.product-satvic-fluid[data-theme=sage]{--studio-accent:#42634e;--studio-accent-deep:#355442;--studio-soft:#edf4ef;--studio-canvas:#f7faf7;--studio-glow:#eaf3ed88;--studio-line:#e1ebe3;--studio-body:#53665a;--studio-shadow:#42634e20;--studio-dark-glow:#42634e26}
 .app-shell.product-satvic-fluid[data-theme=lavender]{--studio-accent:#705c99;--studio-accent-deep:#59467e;--studio-soft:#f0ecf7;--studio-canvas:#faf8fc;--studio-glow:#eee8f588;--studio-line:#e9e2f1;--studio-body:#625a70;--studio-shadow:#705c9920;--studio-dark-glow:#705c9928}
@@ -1743,3 +1764,10 @@ body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d11
 .app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result>b{color:var(--studio-dark-text)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .speaker-provider-result>.secondary-btn[aria-pressed=true]{border-color:var(--studio-accent)!important;background:#25382b!important;color:var(--studio-dark-text)!important}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-menu .account-delete-trigger{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:#ff7b72}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-menu .account-delete-trigger svg{color:#ff7b72}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-surface)!important;color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal h2,.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal label strong{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal>p,.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal label{color:var(--studio-dark-muted)}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-modal input{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .account-delete-actions .account-delete-cancel{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}

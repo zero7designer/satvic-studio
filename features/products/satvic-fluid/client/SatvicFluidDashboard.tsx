@@ -1480,6 +1480,9 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     void startPlayback();
   }
 
+  const folderLibraryVideoTypes: VideoFormType[] = workflowDashboardOpen ? [selectedVideoType] : ['short', 'long'];
+  const folderLibraryFolders = folders.filter(folder => folderLibraryVideoTypes.includes(folder.video_type || 'short'));
+
   return (
     <ProductDashboardShell
       productId="satvic-fluid"
@@ -1609,12 +1612,14 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
       {!costEstimatePage && workflowDashboardOpen && activeFolderId && <section className="folder-overview-grid" aria-label="Project overview"><IndiaCommunityMapCard projects={folderProjects} compact selectedState={selectedMapState} onStateSelect={setSelectedMapState}/><FeedbackCalendarCard folderId={activeFolderId} formUrl={activeFolder?.feedback_form_url} sheetUrl={activeFolder?.feedback_sheet_url} readOnly={!activeFolder?.is_owner} onSaveFormLinks={activeFolder?.is_owner ? saveFolderFeedbackLinks : undefined}/></section>}
 
       {!costEstimatePage && !activeFolderId && !reportPage && <section className="folder-library panel" aria-label="Project folders">
-        <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></h3></div><div className="project-tools">
+        <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folderLibraryFolders.length}</span></h3></div><div className="project-tools">
           <button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(selectedVideoType);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
-        {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className="folder-library-grid">
-          <section className="folder-type-column">
-            <header><div><b>{selectedVideoType === 'short' ? 'Short form' : 'Long form'}</b><FolderPlatformBadges videoType={selectedVideoType}/></div><span>{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></header>
-            {folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).map(folder => {
+        {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className={`folder-library-grid ${workflowDashboardOpen ? 'workspace-view' : 'overview-view'}`}>
+          {folderLibraryVideoTypes.map(videoType => {
+            const formatFolders = folderLibraryFolders.filter(folder => (folder.video_type || 'short') === videoType);
+            return <section className="folder-type-column" key={videoType}>
+            <header><div><b>{videoType === 'short' ? 'Short form' : 'Long form'}</b><FolderPlatformBadges videoType={videoType}/></div><span>{formatFolders.length}</span></header>
+            {formatFolders.map(folder => {
               const progress = folderProgress.get(folder.id) || emptyFolderProgress;
               const progressAvailable = jobHistoryState === 'ready';
               const qaPercent = progressAvailable && progress.total ? Math.round(progress.qaReports / progress.total * 100) : 0;
@@ -1647,8 +1652,9 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                 <ArrowRight size={16}/>
               </button>;
             })}
-            {!folders.some(folder => (folder.video_type || 'short') === selectedVideoType) && <div className="folder-type-empty">{selectedVideoType === 'short' ? 'Short-form project folders will appear here.' : 'Long-form project folders will appear here.'}</div>}
-          </section>
+            {!formatFolders.length && <div className="folder-type-empty">{videoType === 'short' ? 'Short-form project folders will appear here.' : 'Long-form project folders will appear here.'}</div>}
+          </section>;
+          })}
         </div>}
       </section>}
 

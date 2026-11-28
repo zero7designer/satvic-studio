@@ -36,9 +36,6 @@ const issues: Issue[] = [];
 const languages = ['Tamil', 'Telugu', 'Gujarati', 'Kannada', 'Bengali', 'Marathi', 'Punjabi', 'Malayalam', 'Hindi', 'English', 'Assamese', 'Odia'];
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const projectActivityDate = (project: Project) => project.status === 'In progress'
-  ? project.createdAt
-  : project.updatedAt || project.createdAt;
 const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 const clipKey = (videoId: string, start: number, end?: number) => `${videoId}:${start}:${end ?? ''}`;
 function quoteTimeRange(segments: TranscriptSegment[], phrase: string) {
@@ -524,60 +521,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     }
     return progressByFolder;
   }, [projects]);
-  const recentFoldersByFormat = useMemo(() => {
-    const recentFirst = folders
-      .map(folder => ({
-        folder,
-        activityDate: projects.reduce((latest, project) => {
-          if (project.isExample || project.folderId !== folder.id) return latest;
-          return Math.max(latest, Date.parse(projectActivityDate(project) || '') || 0);
-        }, Date.parse(folder.created_at) || 0),
-      }))
-      .sort((left, right) => right.activityDate - left.activityDate)
-      .map(({ folder }) => folder);
-    return {
-      short: recentFirst.filter(folder => (folder.video_type || 'short') === 'short').slice(0, 2),
-      long: recentFirst.filter(folder => folder.video_type === 'long').slice(0, 2),
-    };
-  }, [folders, projects]);
-  const folderPreviewDetails = (folderId: string) => {
-    const progress = folderProgress.get(folderId) || emptyFolderProgress;
-    if (jobHistoryState === 'loading') return { summary: 'Loading project status…', status: '', statusClass: '', qaPercent: 0 };
-    if (jobHistoryState === 'error') return { summary: 'Progress unavailable', status: '', statusClass: '', qaPercent: 0 };
-    if (!progress.total) return { summary: 'No videos yet', status: '', statusClass: '', qaPercent: 0 };
-    const status = progress.needsReview
-      ? { label: `${progress.needsReview} need review`, className: 'needs-review' }
-      : progress.inProgress
-        ? { label: `${progress.inProgress} in progress`, className: 'in-progress' }
-        : progress.failed
-          ? { label: `${progress.failed} failed`, className: 'failed' }
-          : { label: 'Up to date', className: 'ready' };
-    return {
-      summary: `${progress.dubbed}/${progress.total} dubbed · ${progress.qaReports}/${progress.total} QA reports`,
-      status: status.label,
-      statusClass: status.className,
-      qaPercent: Math.round(progress.qaReports / progress.total * 100),
-    };
-  };
-  const renderRecentFolderList = (videoType: VideoFormType) => {
-    const recent = recentFoldersByFormat[videoType];
-    const total = folders.filter(folder => (folder.video_type || 'short') === videoType).length;
-    return <>
-      <small>RECENT PROJECTS{total > 2 ? ` · ${total}` : ''}</small>
-      {foldersLoading ? <span className="workflow-format-recent-empty">Loading project folders…</span> : recent.length ? <>
-        {recent.map(folder => {
-          const preview = folderPreviewDetails(folder.id);
-          const progress = folderProgress.get(folder.id) || emptyFolderProgress;
-          return <span className="workflow-format-recent-item workflow-format-recent-folder" key={folder.id}>
-            <span><b>{folder.name}</b><small>{preview.summary}</small></span>
-            {preview.status && <span className={`workflow-format-recent-status ${preview.statusClass}`}><i/>{preview.status}</span>}
-            {jobHistoryState === 'ready' && progress.total > 0 && <span className="workflow-format-folder-meter" aria-hidden="true"><i style={{ width: `${preview.qaPercent}%` }}/></span>}
-          </span>;
-        })}
-        {total > recent.length && <span className="workflow-format-recent-more">Open dashboard to view all {total} projects</span>}
-      </> : <span className="workflow-format-recent-empty">No {videoType === 'short' ? 'Short-form' : 'Long-form'} project folders yet</span>}
-    </>;
-  };
   const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
   const activeFormatRequests = useMemo(() => incomingRequests.filter(request =>
     request.video_type === selectedVideoType && request.status !== 'completed',
@@ -1664,14 +1607,12 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             <button type="button" className="workflow-format-card short" onClick={() => { setSelectedVideoType('short'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
               <span className="workflow-format-card-icon"><span className="video-platform-pair"><Instagram size={18}/><Youtube size={18}/></span></span>
               <span className="workflow-format-card-copy"><small>SHORT-FORM</small><b>Instagram Reels &amp; YouTube Shorts</b><span>Vertical videos, Reels, and Shorts</span>
-                <span className="workflow-format-recent">{renderRecentFolderList('short')}</span>
               </span>
               <ArrowRight size={18}/>
             </button>
             <button type="button" className="workflow-format-card long" onClick={() => { setSelectedVideoType('long'); setSelectedTaskDate(null); setActiveFolderId(null); setWorkflowDashboardOpen(true); }}>
               <span className="workflow-format-card-icon"><Youtube size={20}/></span>
               <span className="workflow-format-card-copy"><small>LONG-FORM</small><b>YouTube videos</b><span>Full-length videos and episodes</span>
-                <span className="workflow-format-recent">{renderRecentFolderList('long')}</span>
               </span>
               <ArrowRight size={18}/>
             </button>
@@ -1729,8 +1670,13 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
 
       {!costEstimatePage && workflowDashboardOpen && activeFolderId && <section className="folder-overview-grid" aria-label="Project overview"><IndiaCommunityMapCard projects={folderProjects} compact selectedState={selectedMapState} onStateSelect={setSelectedMapState}/><FeedbackCalendarCard folderId={activeFolderId} formUrl={activeFolder?.feedback_form_url} sheetUrl={activeFolder?.feedback_sheet_url} readOnly={!activeFolder?.is_owner} onSaveFormLinks={activeFolder?.is_owner ? saveFolderFeedbackLinks : undefined}/></section>}
 
-      {!costEstimatePage && workflowDashboardOpen && !activeFolderId && <section className="folder-library panel" aria-label={`${selectedVideoType === 'short' ? 'Short-form' : 'Long-form'} project folders`}>
-        <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>{selectedVideoType === 'short' ? 'Short-form projects' : 'Long-form projects'} <span className="heading-count">{folders.filter(folder => folder.video_type === selectedVideoType).length}</span></h3></div><div className="project-tools"><button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(selectedVideoType);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
+      {!costEstimatePage && !activeFolderId && !reportPage && <section className="folder-library panel" aria-label="Project folders">
+        <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></h3></div><div className="project-tools">
+          <div className="folder-library-format-switch" role="group" aria-label="Filter project folders by format">
+            <button type="button" className={cx(selectedVideoType === 'short' && 'selected')} aria-pressed={selectedVideoType === 'short'} onClick={() => setSelectedVideoType('short')}>Short-form</button>
+            <button type="button" className={cx(selectedVideoType === 'long' && 'selected')} aria-pressed={selectedVideoType === 'long'} onClick={() => setSelectedVideoType('long')}>Long-form</button>
+          </div>
+          <button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(selectedVideoType);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
         {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className="folder-library-grid">
           <section
             className={cx('folder-type-column', dragOverVideoType === selectedVideoType && 'drag-over', Boolean(draggedFolderId) && 'folder-drop-active')}
@@ -1738,8 +1684,8 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             onDragLeave={event => { if (event.currentTarget === event.target) setDragOverVideoType(null); }}
             onDrop={event => dropFolder(event, selectedVideoType)}
           >
-            <header><div><b>{selectedVideoType === 'short' ? 'Short form' : 'Long form'}</b><FolderPlatformBadges videoType={selectedVideoType}/></div><span>{folders.filter(folder => folder.video_type === selectedVideoType).length}</span></header>
-            {folders.filter(folder => folder.video_type === selectedVideoType).map(folder => {
+            <header><div><b>{selectedVideoType === 'short' ? 'Short form' : 'Long form'}</b><FolderPlatformBadges videoType={selectedVideoType}/></div><span>{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></header>
+            {folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).map(folder => {
               const progress = folderProgress.get(folder.id) || emptyFolderProgress;
               const progressAvailable = jobHistoryState === 'ready';
               const qaPercent = progressAvailable && progress.total ? Math.round(progress.qaReports / progress.total * 100) : 0;
@@ -1758,7 +1704,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                 draggable={folder.is_owner}
                 onDragStart={event => { if (folder.is_owner) startFolderDrag(event, folder.id); }}
                 onDragEnd={() => { setDraggedFolderId(null); setDragOverVideoType(null); }}
-                onClick={() => { setActiveFolderId(folder.id); setActiveTab('All projects'); }}
+                onClick={() => { setSelectedVideoType(folder.video_type || 'short'); setSelectedTaskDate(null); setWorkflowDashboardOpen(true); setActiveFolderId(folder.id); setActiveTab('All projects'); }}
                 aria-label={`${folder.name}: ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports` : progressLabel}${folder.is_owner ? '. Drag to the other format to move this folder, or open it.' : '. Open folder.'}`}
               >
                 <Folder size={19}/>
@@ -1774,7 +1720,7 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
                 <ArrowRight size={16}/>
               </button>;
             })}
-            {!folders.some(folder => folder.video_type === selectedVideoType) && <div className="folder-type-empty">{selectedVideoType === 'short' ? 'Short-form project folders will appear here.' : 'Long-form project folders will appear here.'}</div>}
+            {!folders.some(folder => (folder.video_type || 'short') === selectedVideoType) && <div className="folder-type-empty">{selectedVideoType === 'short' ? 'Short-form project folders will appear here.' : 'Long-form project folders will appear here.'}</div>}
           </section>
           <div
             className={cx('workflow-folder-drop-target', dragOverVideoType === (selectedVideoType === 'short' ? 'long' : 'short') && 'drag-over', Boolean(draggedFolderId) && 'folder-drop-active')}

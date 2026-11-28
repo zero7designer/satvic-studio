@@ -1715,7 +1715,6 @@ body:has(.app-shell.product-satvic-fluid[data-mode=dark]){background-color:#0d11
 .app-shell.product-video-manager .welcome-row h1{color:var(--studio-accent-deep)}
 .app-shell.product-video-manager .primary-btn{border-color:var(--studio-accent);background:var(--studio-accent);color:#fff;box-shadow:0 5px 14px var(--studio-shadow)}
 .app-shell.product-video-manager .primary-btn:hover{background:var(--studio-accent-deep)}
-.app-shell .video-manager-create-mark{display:grid;width:36px;height:36px;place-items:center;border:1px solid var(--studio-line,#e1ebe3);border-radius:11px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
 .video-manager-dashboard{width:min(100%,980px);margin:0 auto;padding-bottom:24px}
 .video-manager-create-card{overflow:hidden;padding:0;border:1px solid #e6ebe5;border-radius:16px;background:#ffffffd9;box-shadow:0 8px 26px #506b5810,inset 0 1px #fff;-webkit-backdrop-filter:blur(16px) saturate(115%);backdrop-filter:blur(16px) saturate(115%)}
 .video-manager-create-heading{display:flex;align-items:flex-start;gap:14px;padding:22px 24px;border-bottom:1px solid var(--studio-line,#e1ebe3);background:linear-gradient(115deg,var(--studio-soft,#edf4ef),#ffffffa8)}
@@ -1848,6 +1847,87 @@ html:has(.app-shell.product-video-manager[data-mode=dark]),body:has(.app-shell.p
   .video-manager-form-footer{align-items:stretch;flex-direction:column}
   .video-manager-form-footer .primary-btn{justify-content:center}
 }
+
+.nav-feature-wrap{position:relative;width:100%}
+.app-shell .nav-feature-wrap>.nav-item{width:100%}
+.nav-feature-chevron{margin-left:auto;transition:transform .18s ease}
+.nav-feature-chevron.open{transform:rotate(180deg)}
+.nav-subnav{display:grid;gap:3px;margin:3px 0 8px 25px;padding-left:9px;border-left:1px solid #e6ebe5}
+.nav-subitem{display:flex;width:100%;min-height:43px;align-items:center;gap:9px;padding:4px 8px;border:0;border-radius:8px;background:transparent;color:#4e504b;text-align:left;cursor:pointer}
+.nav-subitem:hover,.nav-subitem.active{background:#f2f6f2}
+.nav-subitem-icon{display:grid;width:27px;height:27px;flex:none;place-items:center;border-radius:8px;background:#f3f5f1;color:#687b68}
+.nav-subitem-icon.short{background:#f8f0ea;color:#a86a51}
+.nav-subitem-icon.long{background:#f8eeee;color:#b45450}
+.nav-subitem>span:last-child{display:grid;min-width:0;gap:2px;color:#444b43;font:500 11px/1.2 "Matter"}
+.nav-subitem small{overflow:hidden;color:#8a9087;font:400 8px/1.3 "Matter";text-overflow:ellipsis;white-space:nowrap}
+.app-shell.feature-rail-collapsed .nav-feature-chevron{display:none}
+.app-shell.feature-rail-collapsed .nav-subnav{position:absolute;z-index:90;top:0;left:calc(100% + 7px);width:218px;margin:0;padding:7px;border:1px solid #e2e8e1;border-radius:11px;background:#fff;box-shadow:0 10px 28px #20211f1a}
+.app-shell.feature-rail-collapsed .nav-subitem>span:last-child{display:grid}
+.app-shell.feature-rail-collapsed .nav-subitem{justify-content:flex-start;gap:9px;padding:4px 8px}
+.app-shell.feature-rail-collapsed .nav-subitem-icon{width:27px;height:27px}
+.workflow-selected-format{display:flex;align-items:center;gap:7px;margin:7px 0 4px;color:#6b786e}
+.workflow-selected-format>span{display:grid;width:26px;height:26px;place-items:center;border-radius:8px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
+.workflow-selected-format.short>span{background:#f8f0ea;color:#a86a51}
+.workflow-selected-format.long>span{background:#f8eeee;color:#b45450}
+.workflow-selected-format b{font:500 10px/1.3 "Matter"}
+.workflow-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0 0 22px}
+.workflow-tasks-panel,.workflow-calendar-panel{min-width:0;overflow:hidden;padding:0;border:1px solid #e5ebe5;border-radius:15px;background:#ffffffd9;box-shadow:0 8px 24px #506b580c}
+.workflow-overview-heading{display:flex;min-height:62px;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid #edf0eb}
+.workflow-overview-title{display:flex;min-width:0;align-items:center;gap:10px}
+.workflow-overview-title>span{display:grid;width:34px;height:34px;flex:none;place-items:center;border-radius:10px;background:var(--studio-soft,#edf4ef);color:var(--studio-accent,#42634e)}
+.workflow-overview-title>div{min-width:0}
+.workflow-overview-title .section-kicker{display:block;color:var(--studio-accent,#42634e);font-size:8px}
+.workflow-overview-title h2{overflow:hidden;margin:4px 0 0;color:#303b31;font:500 14px/1.25 "Matter";text-overflow:ellipsis;white-space:nowrap}
+.workflow-task-total{flex:none;padding:5px 8px;border-radius:999px;background:#f0f3ef;color:#687566;font:500 9px "Matter"}
+.workflow-overview-caption{min-height:32px;margin:0;padding:10px 16px 3px;color:#858d83;font:400 9px/1.4 "Matter"}
+.workflow-task-list{max-height:246px;overflow:auto;padding:0 9px 7px;scrollbar-width:thin}
+.workflow-task-row{display:flex;width:100%;min-height:52px;align-items:center;gap:9px;padding:7px;border:0;border-bottom:1px solid #f0f2ef;border-radius:7px;background:transparent;text-align:left;cursor:pointer}
+.workflow-task-row:hover{background:#f7f9f6}
+.workflow-task-status{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:8px;background:#f5f1e7;color:#9a7848}
+.workflow-task-status.ready,.workflow-task-status.needs-review{background:#edf5ef;color:#558363}
+.workflow-task-status.failed{background:#faefec;color:#b77567}
+.workflow-task-copy{display:grid;min-width:0;flex:1;gap:3px}
+.workflow-task-copy>b{overflow:hidden;color:#424a41;font:500 10px "Matter";text-overflow:ellipsis;white-space:nowrap}
+.workflow-task-copy>small{overflow:hidden;color:#899087;font:400 8px "Matter";text-overflow:ellipsis;white-space:nowrap}
+.workflow-task-row>time{flex:none;color:#939a91;font:400 8px "Matter"}
+.workflow-task-state,.workflow-task-empty{display:flex;min-height:148px;align-items:center;justify-content:center;gap:8px;padding:20px;color:#858d83;font:400 10px/1.5 "Matter";text-align:center}
+.workflow-task-state.error{color:#aa534a}
+.workflow-task-empty{flex-direction:column}
+.workflow-task-empty button,.workflow-calendar-footer button{padding:0;border:0;background:transparent;color:var(--studio-accent,#42634e);font:500 9px "Matter";cursor:pointer}
+.workflow-calendar-controls{display:flex;gap:4px}
+.workflow-calendar-controls button{display:grid;width:28px;height:28px;place-items:center;border:1px solid #e7ebe5;border-radius:8px;background:#fff;color:#6c796a;cursor:pointer}
+.workflow-calendar-controls button:hover{border-color:#cdd9ca;background:#f7faf6}
+.workflow-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:12px 16px 8px}
+.workflow-calendar-weekday{display:grid;height:21px;place-items:center;color:#989e95;font:500 8px "Matter"}
+.workflow-calendar-spacer{height:30px}
+.workflow-calendar-day{position:relative;display:grid;min-width:0;height:30px;place-items:center;border:1px solid transparent;border-radius:8px;background:transparent;color:#5a6258;font:400 9px "Matter";cursor:pointer}
+.workflow-calendar-day:hover{background:#f3f6f2}
+.workflow-calendar-day.today{border-color:#dbe5d9;color:var(--studio-accent,#42634e);font-weight:600}
+.workflow-calendar-day.has-activity:after{position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--studio-accent,#42634e);content:""}
+.workflow-calendar-day[aria-pressed=true]{border-color:var(--studio-accent,#42634e);background:var(--studio-soft,#edf4ef);color:var(--studio-accent-deep,#355442);font-weight:600}
+.workflow-calendar-day[aria-pressed=true]:after{background:var(--studio-accent,#42634e)}
+.workflow-calendar-day i{position:absolute;top:-3px;right:-2px;min-width:12px;padding:1px 3px;border-radius:7px;background:var(--studio-accent,#42634e);color:#fff;font:500 6px/1.2 "Matter";font-style:normal;text-align:center}
+.workflow-calendar-footer{display:flex;min-height:36px;align-items:center;justify-content:space-between;gap:8px;padding:6px 16px 10px;color:#939a91;font:400 8px/1.4 "Matter"}
+.folder-library-grid{grid-template-columns:minmax(0,1fr) minmax(190px,.36fr)}
+.workflow-folder-drop-target{display:flex;min-height:110px;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:15px;border:1px dashed #dfe6dc;border-radius:12px;background:#f9fbf8;color:#738071;text-align:center;transition:border-color .15s,background .15s}
+.workflow-folder-drop-target>span{display:grid;width:30px;height:30px;place-items:center;border-radius:9px;background:#eef3ed;color:var(--studio-accent,#42634e)}
+.workflow-folder-drop-target>b{color:#657361;font:500 10px "Matter"}
+.workflow-folder-drop-target>small{color:#929a8f;font:400 8px/1.4 "Matter"}
+.workflow-folder-drop-target.folder-drop-active{border-color:#abc1a8;background:#f2f7f1}
+.workflow-folder-drop-target.drag-over{border-style:solid;border-color:var(--studio-accent,#42634e);background:var(--studio-soft,#edf4ef)}
+.app-shell.product-satvic-fluid[data-mode=dark] .nav-subnav{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .nav-subitem:hover,.app-shell.product-satvic-fluid[data-mode=dark] .nav-subitem.active{background:var(--studio-dark-raised)}
+.app-shell.product-satvic-fluid[data-mode=dark] .nav-subitem>span:last-child,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-overview-title h2,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-task-copy>b{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.workflow-tasks-panel,.workflow-calendar-panel){border-color:var(--studio-dark-border);background:var(--studio-dark-surface);box-shadow:none}
+.app-shell.product-satvic-fluid[data-mode=dark] :is(.workflow-overview-heading,.workflow-task-row){border-color:var(--studio-dark-border)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-task-row:hover,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day:hover{background:var(--studio-dark-raised)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-controls button{border-color:var(--studio-dark-border);background:var(--studio-dark-raised);color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day{color:var(--studio-dark-text)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day.today,.app-shell.product-satvic-fluid[data-mode=dark] .workflow-calendar-day[aria-pressed=true]{border-color:var(--studio-accent);background:var(--studio-dark-raised)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-folder-drop-target{border-color:var(--studio-dark-border);background:var(--studio-dark-surface)}
+.app-shell.product-satvic-fluid[data-mode=dark] .workflow-folder-drop-target.drag-over{border-color:var(--studio-accent);background:var(--studio-dark-raised)}
+@media(max-width:760px){.workflow-overview-grid{grid-template-columns:1fr}.folder-library-grid{grid-template-columns:1fr}.workflow-folder-drop-target{min-height:82px}}
+@media(max-width:520px){.workflow-overview-heading{padding-right:11px;padding-left:11px}.workflow-calendar-grid{gap:2px;padding-right:10px;padding-left:10px}.workflow-calendar-day{height:28px}.workflow-calendar-footer{padding-right:11px;padding-left:11px}}
 .app-shell.product-satvic-fluid[data-mode=dark] .workflow-format-back{color:var(--studio-dark-muted)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .folder-video-type-option{border-color:var(--studio-dark-border)!important;background:var(--studio-dark-raised)!important;color:var(--studio-dark-text)!important}
 .app-shell.product-satvic-fluid[data-mode=dark] .folder-video-type-option:hover,

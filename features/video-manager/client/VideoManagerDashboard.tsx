@@ -125,14 +125,6 @@ export default function VideoManagerDashboard({
     >
       <div className="video-manager-dashboard">
         {activeView === 'create-job' ? <>
-          <header className="welcome-row">
-            <div>
-              <span className="eyebrow"><span className="eyebrow-line"/> VIDEO MANAGER</span>
-              <h1>Create dub job</h1>
-              <p className="welcome-subtitle">Send a video and language requirements to the dubbing team.</p>
-            </div>
-          </header>
-
           <section className="video-manager-create-card panel" aria-labelledby="video-manager-new-request-title">
             <header className="video-manager-create-heading">
               <div className="video-manager-create-heading-icon"><Plus size={19}/></div>
@@ -195,7 +187,6 @@ export default function VideoManagerDashboard({
         </> : <>
           <header className="welcome-row video-manager-status-header">
             <div>
-              <span className="eyebrow"><span className="eyebrow-line"/> VIDEO MANAGER</span>
               <h1>Request status</h1>
               <p className="welcome-subtitle">Follow your videos from submission through the dubbing queue.</p>
             </div>

@@ -4,6 +4,7 @@ export type ProductFeature = {
   id: string;
   label: string;
   icon: 'plus' | 'workflow' | 'calculator';
+  videoTypes?: ('short' | 'long')[];
 };
 
 export type ProductDefinition = {
@@ -11,7 +12,7 @@ export type ProductDefinition = {
   name: string;
   description: string;
   href: string;
-  icon: 'audio' | 'plus';
+  icon: 'audio' | 'video';
   groups: { label: string; features: ProductFeature[] }[];
 };
 
@@ -24,8 +25,8 @@ export const products: ProductDefinition[] = [
     icon: 'audio',
     groups: [
       { label: '', features: [
-        { id: 'generate-sarvam', label: 'Generate with Sarvam', icon: 'plus' },
-        { id: 'start-review', label: 'Start a review', icon: 'workflow' },
+        { id: 'generate-sarvam', label: 'Generate with Sarvam', icon: 'plus', videoTypes: ['short', 'long'] },
+        { id: 'start-review', label: 'Start a review', icon: 'workflow', videoTypes: ['short', 'long'] },
         { id: 'cost-estimate', label: 'Cost estimate', icon: 'calculator' },
       ] },
     ],
@@ -35,7 +36,7 @@ export const products: ProductDefinition[] = [
     name: 'Create Job',
     description: 'Video Manager',
     href: '/video-manager',
-    icon: 'plus',
+    icon: 'video',
     groups: [
       { label: '', features: [
         { id: 'create-job', label: 'Create dub job', icon: 'plus' },

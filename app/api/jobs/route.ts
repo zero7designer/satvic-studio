@@ -7,7 +7,7 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: 'Sign in to view your project history.' }, { status: 401 });
-    const jobFields = 'id, user_id, run_id, project_name, original_name, source_language, target_language, status, issue_count, error_message, folder_id, original_blob_url, original_b2_key, dubbed_blob_url, created_at, updated_at';
+    const jobFields = 'id, user_id, run_id, project_name, original_name, source_language, target_language, video_type, status, issue_count, error_message, folder_id, original_blob_url, original_b2_key, dubbed_blob_url, created_at, updated_at';
     const [ownedResult, sharedFoldersResult] = await Promise.all([
       supabase.from('qa_jobs').select(jobFields).eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
       supabase.from('qa_folders').select('id').eq('is_shared', true).neq('user_id', user.id),

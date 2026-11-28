@@ -16,11 +16,13 @@ export async function POST(request: Request) {
     const originalBlobUrl = String(body.originalBlobUrl || '');
     const sourceLanguage = String(body.sourceLanguage || '');
     const targetLanguage = String(body.targetLanguage || '');
+    const videoType = body.videoType;
     const numSpeakers = Number(body.numSpeakers);
     const originalName = String(body.originalName || 'source.mp4').slice(0, 180);
     const projectName = String(body.projectName || originalName.replace(/\.[^.]+$/, '')).slice(0, 120);
     if (!/^https:\/\/.+\.blob\.vercel-storage\.com\//.test(originalBlobUrl)) return Response.json({ error: 'Upload the original video to Blob storage before starting the job.' }, { status: 400 });
     if (!LANGUAGES.has(sourceLanguage) || !LANGUAGES.has(targetLanguage) || sourceLanguage === targetLanguage) return Response.json({ error: 'Choose a supported source and target language, and make sure they differ.' }, { status: 400 });
+    if (videoType !== 'short' && videoType !== 'long') return Response.json({ error: 'Choose Short-form or Long-form for this job.' }, { status: 400 });
     if (!Number.isSafeInteger(numSpeakers) || numSpeakers < 1) return Response.json({ error: 'Enter a whole number of speakers (at least 1).'}, { status: 400 });
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -28,11 +30,12 @@ export async function POST(request: Request) {
     const folderId = body.folderId == null ? null : String(body.folderId);
     if (folderId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(folderId)) return Response.json({ error: 'Choose a valid folder.' }, { status: 400 });
     if (folderId) {
-      const { data: folder, error: folderError } = await supabase.from('qa_folders').select('id').eq('id', folderId).eq('user_id', user.id).maybeSingle();
+      const { data: folder, error: folderError } = await supabase.from('qa_folders').select('id, video_type').eq('id', folderId).eq('user_id', user.id).maybeSingle();
       if (folderError) throw folderError;
       if (!folder) return Response.json({ error: 'That folder does not belong to your account.' }, { status: 404 });
+      if (folder.video_type !== videoType) return Response.json({ error: 'Choose a folder that matches this video format.' }, { status: 400 });
     }
-    const { data: job, error: insertError } = await supabase.from('qa_jobs').insert({ user_id: user.id, folder_id: folderId, project_name: projectName, original_name: originalName, source_language: sourceLanguage, target_language: targetLanguage, original_blob_url: originalBlobUrl, status: 'queued' }).select('id').single();
+    const { data: job, error: insertError } = await supabase.from('qa_jobs').insert({ user_id: user.id, folder_id: folderId, video_type: videoType, project_name: projectName, original_name: originalName, source_language: sourceLanguage, target_language: targetLanguage, original_blob_url: originalBlobUrl, status: 'queued' }).select('id').single();
     if (insertError || !job) throw insertError || new Error('Could not save this job to your history.');
     let run;
     try {

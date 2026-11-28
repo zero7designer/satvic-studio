@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight, AudioLines, Bell, Calculator, Check, CheckCheck, ChevronDown,
-  LoaderCircle, LogOut, Menu, Moon, Palette, PanelLeftClose,
-  PanelLeftOpen, Plus, Sun, Trash2, X, type LucideIcon,
+  Instagram, LoaderCircle, LogOut, Menu, Moon, Palette, PanelLeftClose,
+  PanelLeftOpen, Plus, Sun, Trash2, Video, X, Youtube, type LucideIcon,
 } from 'lucide-react';
 import { signOut } from '@/features/auth/server/actions';
 import { getProduct, products, type ProductDefinition, type ProductFeature, type ProductId } from '@/features/products/registry';
@@ -20,7 +20,7 @@ const featureIcons: Record<ProductFeature['icon'], LucideIcon> = {
 };
 const productIcons: Record<ProductDefinition['icon'], LucideIcon> = {
   audio: AudioLines,
-  plus: Plus,
+  video: Video,
 };
 
 type ProductDashboardShellProps = {
@@ -28,6 +28,7 @@ type ProductDashboardShellProps = {
   accountEmail: string;
   accountAvatar?: string;
   onFeatureSelect?: (featureId: string) => void;
+  onVideoTypeSelect?: (videoType: 'short' | 'long') => void;
   initialFeatureId?: string;
   hideFeatureNavigation?: boolean;
   children: ReactNode;
@@ -47,6 +48,7 @@ export default function ProductDashboardShell({
   accountEmail,
   accountAvatar = 'sage',
   onFeatureSelect,
+  onVideoTypeSelect,
   initialFeatureId,
   hideFeatureNavigation = false,
   children,
@@ -75,6 +77,8 @@ export default function ProductDashboardShell({
   const [notificationError, setNotificationError] = useState('');
   const [followingNotificationId, setFollowingNotificationId] = useState<string | null>(null);
   const [activeFeatureId, setActiveFeatureId] = useState(initialFeatureId ?? product.groups[0].features[1]?.id ?? product.groups[0].features[0].id);
+  const [expandedFeatureId, setExpandedFeatureId] = useState<string | null>(initialFeatureId ?? null);
+  const [activeVideoType, setActiveVideoType] = useState<'short' | 'long'>('short');
 
   useEffect(() => {
     const savedTheme = dashboardThemes.find(option => option.id === window.localStorage.getItem('satvic-studio-dashboard-theme'));
@@ -110,6 +114,9 @@ export default function ProductDashboardShell({
     const requested = searchParams.get('feature') || (productId === 'satvic-fluid' && searchParams.has('qaRunId') ? 'start-review' : null);
     if (requested && product.groups.some(group => group.features.some(feature => feature.id === requested))) {
       setActiveFeatureId(requested);
+      if (product.groups.some(group => group.features.some(feature => feature.id === requested && feature.videoTypes?.length))) {
+        setExpandedFeatureId(requested);
+      }
       onFeatureSelect?.(requested);
     }
   }, [onFeatureSelect, product.groups, productId, searchParams]);
@@ -136,6 +143,25 @@ export default function ProductDashboardShell({
     setNotificationOpen(false);
     setActiveFeatureId(feature.id);
     onFeatureSelect?.(feature.id);
+    setNavOpen(false);
+  };
+  const toggleFeature = (feature: ProductFeature) => {
+    if (!feature.videoTypes?.length) {
+      chooseFeature(feature);
+      return;
+    }
+    setNotificationOpen(false);
+    setActiveFeatureId(feature.id);
+    onFeatureSelect?.(feature.id);
+    setExpandedFeatureId(current => current === feature.id ? null : feature.id);
+  };
+  const chooseVideoType = (feature: ProductFeature, videoType: 'short' | 'long') => {
+    setNotificationOpen(false);
+    setActiveFeatureId(feature.id);
+    setActiveVideoType(videoType);
+    onFeatureSelect?.(feature.id);
+    onVideoTypeSelect?.(videoType);
+    setExpandedFeatureId(feature.id);
     setNavOpen(false);
   };
 
@@ -260,7 +286,7 @@ export default function ProductDashboardShell({
     <main className={`app-shell product-${productId}${productRailCollapsed ? ' product-rail-collapsed' : ''}${featureRailCollapsed ? ' feature-rail-collapsed' : ''}${hideFeatureNavigation ? ' dashboard-home-shell' : ''}`} data-theme={dashboardTheme} data-mode={dashboardMode}>
       <nav className={`product-rail${productMenuOpen ? ' product-rail-expanded' : ''}`} aria-label="Satvic products">
         <button type="button" className="rail-workspace" aria-label="Open product menu" aria-haspopup="true" aria-expanded={productMenuOpen} title={isVideoManager ? 'Create Job' : 'Satvic Studio and tools'} onClick={() => { setProductMenuOpen(open => !open); setAccountMenuOpen(false); setNotificationOpen(false); }}>
-          <span className="rail-workspace-mark">{isVideoManager ? <span className="video-manager-create-mark"><ProductIcon size={20}/></span> : <img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" />}</span>
+          <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
         </button>
         <div className="rail-product-list" aria-label="Products">
           {visibleProducts.map(item => <button key={item.id} type="button" aria-current={!hideFeatureNavigation && item.id === productId ? 'page' : undefined} className={`rail-product${!hideFeatureNavigation && item.id === productId ? ' active' : ''}`} onClick={() => navigateToProduct(item.href)} title={item.name}>
@@ -276,7 +302,7 @@ export default function ProductDashboardShell({
         </button>
         <section className="product-drawer" aria-label="Satvic Studio and product switcher">
           <div className="drawer-workspace drawer-workspace-static" aria-label={`${product.name} workspace`}>
-            <span className="rail-workspace-mark">{isVideoManager ? <span className="video-manager-create-mark"><ProductIcon size={20}/></span> : <img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" />}</span>
+            <span className="rail-workspace-mark"><img className="satvic-org-mark" src="https://satvicmovement.org/images/favicon.png" alt="" aria-hidden="true" /></span>
             <span><b>{isVideoManager ? 'Create Job' : 'Satvic Studio'}</b><small>{workspaceName}</small></span>
           </div>
           <div className="drawer-product-list" aria-label="Products">
@@ -294,7 +320,22 @@ export default function ProductDashboardShell({
 
       <aside className={`sidebar${navOpen ? ' sidebar-open' : ''}`}>
         {!hideFeatureNavigation && <><div className="workspace-heading"><div className="workspace-product">{product.name}</div><div className="workspace-heading-actions"><button className="sidebar-shrink icon-btn" onClick={() => {const collapse = !featureRailCollapsed;setFeatureRailCollapsed(collapse);setProductRailCollapsed(collapse);}} aria-label={featureRailCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={featureRailCollapsed ? 'Expand navigation' : 'Collapse navigation'}>{featureRailCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button><button className="icon-btn mobile-close" onClick={() => setNavOpen(false)} aria-label="Close navigation"><X size={18} /></button></div></div>
-        {product.groups.map(group => <div className="product-nav-group" key={group.label || product.id}>{group.label && <div className="nav-label nav-label-spaced">{group.label}</div>}<nav className="main-nav">{group.features.map(feature => {const Icon = featureIcons[feature.icon];return <button key={feature.id} title={feature.label} className={`nav-item${activeFeatureId === feature.id ? ' active' : ''}`} onClick={() => chooseFeature(feature)}><Icon size={18} /><span>{feature.label}</span></button>})}</nav></div>)}</>}
+        {product.groups.map(group => <div className="product-nav-group" key={group.label || product.id}>{group.label && <div className="nav-label nav-label-spaced">{group.label}</div>}<nav className="main-nav">{group.features.map(feature => {
+          const Icon = featureIcons[feature.icon];
+          const videoTypes = feature.videoTypes || [];
+          const expanded = expandedFeatureId === feature.id;
+          return <div className={`nav-feature-wrap${expanded ? ' expanded' : ''}`} key={feature.id}>
+            <button type="button" title={feature.label} className={`nav-item${activeFeatureId === feature.id ? ' active' : ''}`} aria-expanded={videoTypes.length ? expanded : undefined} onClick={() => toggleFeature(feature)}>
+              <Icon size={18} /><span>{feature.label}</span>{videoTypes.length > 0 && <ChevronDown className={`nav-feature-chevron${expanded ? ' open' : ''}`} size={14}/>}
+            </button>
+            {videoTypes.length > 0 && expanded && <div className="nav-subnav" aria-label={`${feature.label} video formats`}>
+              {videoTypes.map(videoType => <button type="button" className={`nav-subitem${activeVideoType === videoType ? ' active' : ''}`} key={videoType} onClick={() => chooseVideoType(feature, videoType)}>
+                <span className={`nav-subitem-icon ${videoType}`}>{videoType === 'short' ? <Instagram size={14}/> : <Youtube size={15}/>}</span>
+                <span>{videoType === 'short' ? 'Short-form' : 'Long-form'}<small>{videoType === 'short' ? 'Instagram Reels · YouTube Shorts' : 'YouTube video'}</small></span>
+              </button>)}
+            </div>}
+          </div>;
+        })}</nav></div>)}</>}
         <div className="sidebar-spacer" />
         {featureRailCollapsed && <button type="button" className="rail-account feature-rail-account" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)} title={accountName}><span className="account-trigger-avatar"><img src={getProfileAvatarSrc(accountAvatar)} alt=""/></span></button>}
       </aside>

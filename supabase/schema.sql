@@ -84,6 +84,7 @@ create table if not exists public.qa_jobs (
   original_name text not null,
   source_language text not null,
   target_language text not null,
+  video_type text check (video_type in ('short', 'long')),
   original_blob_url text not null,
   dubbed_blob_url text,
   report_blob_url text,
@@ -127,6 +128,11 @@ create table if not exists public.qa_folders (
 alter table public.qa_folders add column if not exists video_type text check (video_type in ('short', 'long'));
 alter table public.qa_folders add column if not exists is_shared boolean not null default false;
 update public.qa_folders set video_type = 'short' where video_type is null;
+alter table public.qa_jobs add column if not exists video_type text check (video_type in ('short', 'long'));
+update public.qa_jobs jobs set video_type = folders.video_type
+from public.qa_folders folders
+where jobs.folder_id = folders.id and jobs.video_type is null;
+create index if not exists qa_jobs_user_type_updated_idx on public.qa_jobs (user_id, video_type, updated_at desc);
 alter table public.qa_folders add column if not exists feedback_form_url text;
 alter table public.qa_folders add column if not exists feedback_sheet_url text;
 

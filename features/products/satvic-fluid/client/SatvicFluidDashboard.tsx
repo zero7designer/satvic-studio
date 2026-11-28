@@ -1655,10 +1655,6 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
 
       {!costEstimatePage && !activeFolderId && !reportPage && <section className="folder-library panel" aria-label="Project folders">
         <div className="panel-heading"><div><div className="section-kicker">YOUR WORKSPACE</div><h3>Project folders <span className="heading-count">{folders.filter(folder => (folder.video_type || 'short') === selectedVideoType).length}</span></h3></div><div className="project-tools">
-          <div className="folder-library-format-switch" role="group" aria-label="Filter project folders by format">
-            <button type="button" className={cx(selectedVideoType === 'short' && 'selected')} aria-pressed={selectedVideoType === 'short'} onClick={() => setSelectedVideoType('short')}>Short-form</button>
-            <button type="button" className={cx(selectedVideoType === 'long' && 'selected')} aria-pressed={selectedVideoType === 'long'} onClick={() => setSelectedVideoType('long')}>Long-form</button>
-          </div>
           <button ref={searchTriggerRef} type="button" className="search-box search-trigger" onClick={()=>{setQuery("");openSpotlight()}} aria-haspopup="dialog" aria-expanded={searchOpen}><Search size={15}/><span>Search projects</span><kbd>⌘ K</kbd></button><button type="button" className="text-action" onClick={()=>{setFolderError("");setFolderName("");setFolderVideoType(selectedVideoType);setFolderDialogOpen(true)}}><FolderPlus size={14}/> New folder</button></div></div>
         {foldersLoading ? <div className="folder-library-empty">Loading project folders…</div> : <div className="folder-library-grid">
           <section

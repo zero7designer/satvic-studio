@@ -110,9 +110,18 @@ export default function IncomingVideoRequests({ videoType, selectedDate, onReque
                     </button>}
                   </div>
                 </div>
-                <p>From {request.submitter_name} · {request.submitter_email}</p>
-                <div className="incoming-video-languages"><b>Target languages</b>{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
-                <small className="incoming-video-date">{new Date(request.created_at).toLocaleString()}</small>
+                <div className="incoming-video-details">
+                  <div className="incoming-video-requester">
+                    <span className="incoming-video-field-label">Requested by</span>
+                    <b>{request.submitter_name}</b>
+                    <small>{request.submitter_email}</small>
+                  </div>
+                  <div className="incoming-video-language-group">
+                    <span className="incoming-video-field-label">Target languages</span>
+                    <div className="incoming-video-languages">{request.target_languages.map(language => <span key={language}>{language}</span>)}</div>
+                  </div>
+                </div>
+                <small className="incoming-video-date"><Clock3 size={13}/><span>Submitted {new Date(request.created_at).toLocaleString()}</span></small>
               </div>
             </article>)}</div>}
         </>}

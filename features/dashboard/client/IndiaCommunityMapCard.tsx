@@ -93,35 +93,35 @@ export default function IndiaCommunityMapCard({ projects = [], compact = false, 
     });
   }, [compact, projects, activeState]);
 
-  if (compact) return <article className="so-card so-global-card so-india-card so-india-status-card">
-    <div className="so-card-heading"><h2>Dub status across India</h2></div>
-    <div className="so-india-map" role="group" aria-label="Select an Indian state to filter project videos" onClick={event => {
+  if (compact) return <article className="community-map-card community-map-global community-map-status">
+    <div className="community-map-heading"><h2>Dub status across India</h2></div>
+    <div className="community-map-canvas" role="group" aria-label="Select an Indian state to filter project videos" onClick={event => {
       if (!(event.target instanceof Element)) return;
       const stateName = event.target.closest('path')?.querySelector('title')?.textContent?.split(' Â· ')[0];
       const matchedState = stateList.find(state => stateName?.startsWith(state.name));
       if (matchedState) selectState(matchedState.name);
     }} dangerouslySetInnerHTML={{ __html: mapSvg }}/>
-    {activeState && <div className="so-india-filter-note"><span><i aria-hidden="true"/> {activeState} selected · showing matching videos</span><button type="button" onClick={() => { if (selectedState === undefined) setLocalSelectedState(''); onStateSelect?.(null); }}>Clear filter</button></div>}
+    {activeState && <div className="community-map-filter-note"><span><i aria-hidden="true"/> {activeState} selected · showing matching videos</span><button type="button" onClick={() => { if (selectedState === undefined) setLocalSelectedState(''); onStateSelect?.(null); }}>Clear filter</button></div>}
   </article>;
 
-  return <article className="so-card so-global-card so-india-card">
-    <div className="so-card-heading">
-      <div><span className="so-card-kicker">COMMUNITY ACROSS INDIA</span><h2>Explore by state</h2></div>
+  return <article className="community-map-card community-map-global">
+    <div className="community-map-heading">
+      <div><span className="community-map-kicker">COMMUNITY ACROSS INDIA</span><h2>Explore by state</h2></div>
     </div>
-    <div className="so-india-content">
-      <div className="so-india-map" aria-label="Interactive map of India's states and union territories" onClick={event => {
+    <div className="community-map-content">
+      <div className="community-map-canvas" aria-label="Interactive map of India's states and union territories" onClick={event => {
         if (!(event.target instanceof Element)) return;
         const stateName = event.target.closest('path')?.querySelector('title')?.textContent?.split(' · ')[0];
         const matchedState = stateList.find(state => stateName?.startsWith(state.name));
         if (matchedState) selectState(matchedState.name);
       }} dangerouslySetInnerHTML={{ __html: mapSvg }}/>
-      <div className="so-india-state-panel">
-        <div className="so-india-state-summary"><strong>{selectedState}</strong><span>{stateList.length} states &amp; union territories</span></div>
-        <div className="so-india-state-list" aria-label="Choose a state">
+      <div className="community-map-state-panel">
+        <div className="community-map-state-summary"><strong>{selectedState}</strong><span>{stateList.length} states &amp; union territories</span></div>
+        <div className="community-map-state-list" aria-label="Choose a state">
           {stateList.map(state => <button key={state.slug} type="button" className={activeState === state.name ? 'active' : ''} aria-pressed={activeState === state.name} onClick={() => selectState(state.name)}>{state.name}</button>)}
         </div>
       </div>
     </div>
-    <a className="so-map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+    <a className="community-map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
   </article>;
 }

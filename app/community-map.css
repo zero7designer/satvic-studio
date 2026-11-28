@@ -1,0 +1,19 @@
+.community-map-card{min-width:0;overflow:hidden;border:1px solid #ececea;border-radius:18px;background:#fff;box-shadow:0 2px 9px #22251f04}
+.community-map-global{padding:18px 19px}
+.community-map-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.community-map-heading h2{margin:4px 0 0;color:#2d2f2a;font-size:14px;font-weight:550;letter-spacing:-.2px}
+.community-map-kicker{color:#9a9b94;font-size:7px;font-weight:700;letter-spacing:1.25px}
+.community-map-content{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(130px,.85fr);align-items:center;gap:8px;margin-top:8px}
+.community-map-canvas{display:grid;min-width:0;min-height:250px;place-items:center;overflow:hidden}
+.community-map-canvas svg{display:block;width:100%;height:auto;max-height:330px;overflow:visible}
+.community-map-canvas svg path{cursor:pointer;transition:fill .16s}
+.community-map-state-panel{display:grid;min-width:0;gap:8px;align-self:stretch;padding:3px 0}
+.community-map-state-summary{display:grid;gap:3px;padding:0 1px 7px;border-bottom:1px solid #efefed}
+.community-map-state-summary strong{overflow:hidden;color:#59446f;font-size:11px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.community-map-state-summary span{color:#999a93;font-size:7px}
+.community-map-state-list{display:grid;grid-template-columns:1fr;align-content:start;gap:3px;max-height:272px;overflow:auto;padding:1px 3px 2px 0;scrollbar-color:#d5c9df transparent;scrollbar-width:thin}
+.community-map-state-list button{min-width:0;padding:4px 5px;overflow:hidden;border:1px solid transparent;border-radius:5px;background:#f7f7f5;color:#70726b;font-size:7px;text-align:left;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.community-map-state-list button:hover{background:#f2edf7;color:#664a82}
+.community-map-state-list button.active{border-color:#e6ddec;background:#eee7f4;color:#694b85;font-weight:650}
+.community-map-attribution{display:block;margin-top:7px;color:#989a93;font-size:7px;text-align:right;text-decoration:none}
+.community-map-attribution:hover{color:#73578e;text-decoration:underline}

@@ -537,6 +537,17 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
     }
     return progressByFolder;
   }, [projects]);
+  const recentFolders = useMemo(() => folders
+    .map(folder => ({
+      folder,
+      activityDate: projects.reduce((latest, project) => {
+        if (project.isExample || project.folderId !== folder.id) return latest;
+        return Math.max(latest, Date.parse(projectActivityDate(project) || '') || 0);
+      }, Date.parse(folder.created_at) || 0),
+    }))
+    .sort((left, right) => right.activityDate - left.activityDate)
+    .slice(0, 4)
+    .map(({ folder }) => folder), [folders, projects]);
   const activeFolder = folders.find(folder => folder.id === activeFolderId) || null;
   const activeFormatRequests = useMemo(() => incomingRequests.filter(request =>
     request.video_type === selectedVideoType && request.status !== 'completed',
@@ -655,6 +666,14 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
 
   function openSearchFolder(folder: ProjectFolder) {
     closeSpotlight();
+    setActiveFolderId(folder.id);
+    setActiveTab('All projects');
+  }
+
+  function openRecentFolder(folder: ProjectFolder) {
+    setSelectedVideoType(folder.video_type || 'short');
+    setSelectedTaskDate(null);
+    setWorkflowDashboardOpen(true);
     setActiveFolderId(folder.id);
     setActiveTab('All projects');
   }
@@ -1646,6 +1665,41 @@ export default function SatvicFluidDashboard({ initialAccountEmail = '', initial
             </button>
           </div>
         </section>
+        {(foldersLoading || recentFolders.length > 0) && <section className="workflow-recent-folders panel" aria-labelledby="workflow-recent-folders-title">
+          <header className="workflow-recent-folders-heading">
+            <div><span className="section-kicker">YOUR WORKSPACE</span><h2 id="workflow-recent-folders-title">Recent folders <span className="heading-count">{recentFolders.length}</span></h2></div>
+          </header>
+          {foldersLoading ? <div className="workflow-recent-folders-state">Loading recent folders…</div> : <div className="workflow-recent-folder-grid">
+            {recentFolders.map(folder => {
+              const videoType = folder.video_type || 'short';
+              const progress = folderProgress.get(folder.id) || emptyFolderProgress;
+              const progressAvailable = jobHistoryState === 'ready';
+              const qaPercent = progressAvailable && progress.total ? Math.round(progress.qaReports / progress.total * 100) : 0;
+              const statusDetails = [
+                progress.inProgress && `${progress.inProgress} in progress`,
+                progress.needsReview && `${progress.needsReview} need review`,
+                progress.failed && `${progress.failed} failed`,
+              ].filter(Boolean).join(' · ');
+              const progressLabel = !progressAvailable
+                ? jobHistoryState === 'loading' ? 'Loading video progress…' : 'Progress unavailable'
+                : progress.total === 0 ? 'No videos sent yet' : statusDetails || 'QA reports available for all videos';
+              return <button type="button" className="workflow-recent-folder-card" key={folder.id} onClick={() => openRecentFolder(folder)}
+                aria-label={`Open ${folder.name}, ${videoType === 'short' ? 'Short-form' : 'Long-form'} folder. ${progressAvailable ? `${progress.dubbed} of ${progress.total} videos dubbed, ${progress.qaReports} QA reports. ${statusDetails || ''}` : progressLabel}`}>
+                <Folder size={19} aria-hidden="true"/>
+                <span className="workflow-recent-folder-copy">
+                  <span className="workflow-recent-folder-title"><b>{folder.name}</b><ArrowRight size={15} aria-hidden="true"/></span>
+                  <small className="workflow-recent-folder-format">{videoType === 'short' ? <><Instagram size={11} aria-hidden="true"/> Reels · Shorts</> : <><Youtube size={12} aria-hidden="true"/> YouTube</>}</small>
+                  <span className="workflow-recent-folder-metrics">
+                    <span><b>{progressAvailable ? `${progress.dubbed}/${progress.total}` : '—'}</b><small>dubbed</small></span>
+                    <span><b>{progressAvailable ? `${progress.qaReports}/${progress.total}` : '—'}</b><small>QA reports</small></span>
+                  </span>
+                  {progressAvailable && <span className="workflow-recent-folder-meter" aria-hidden="true"><span style={{ width: `${qaPercent}%` }}/></span>}
+                  <small className="workflow-recent-folder-status">{progressLabel}</small>
+                </span>
+              </button>;
+            })}
+          </div>}
+        </section>}
       </section>}
           {costEstimatePage && <section className="cost-dashboard-page" aria-label="Cost estimate dashboard">
             <header className="welcome-row"><div><h1>Cost estimate</h1><p className="welcome-subtitle">Estimate provider costs across every project in your workspace.</p></div></header>
